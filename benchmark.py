@@ -5,7 +5,7 @@ import btree
 
 def benchmark():
     N = 100000
-    t = btree.BTree(50) # Order 50
+    t = btree.BTreeDict(50) # Order 50
     keys = list(range(N))
     random.shuffle(keys)
     

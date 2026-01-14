@@ -34,10 +34,10 @@ python setup.py build_ext --inplace
 ## Quick Start
 
 ```python
-from btree import BTree
+from btree import BTreeDict
 
 # Create a B-tree (default order=8)
-bt = BTree()
+bt = BTreeDict()
 
 # Insert key-value pairs
 bt[5] = "five"
@@ -90,7 +90,7 @@ print(len(bt))      # 0
 
 ## API Reference
 
-### `BTree(order=8)`
+### `BTreeDict(order=8)`
 
 Create a new B-tree with the specified order (minimum degree).
 
@@ -125,14 +125,14 @@ Create a new B-tree with the specified order (minimum degree).
 | `bt.min()` | Return minimum key |
 | `bt.max()` | Return maximum key |
 | `bt.clear()` | Remove all items |
-| `bt == other` | Test equality with another BTree |
+| `bt == other` | Test equality with another BTreeDict |
 
 ### Range Queries with `irange()`
 
 The `irange()` method provides efficient iteration over a range of keys:
 
 ```python
-bt = BTree()
+bt = BTreeDict()
 for i in range(100):
     bt[i] = i * 10
 
@@ -169,10 +169,10 @@ A B-tree of order `t` has the following properties:
 
 ```python
 # For in-memory use with many items (default)
-bt = BTree()
+bt = BTreeDict()
 
 # For smaller datasets or tight memory constraints
-bt = BTree(order=3)
+bt = BTreeDict(order=3)
 ```
 
 ## Performance
@@ -196,11 +196,11 @@ Use **dict** when you need:
 - Fastest possible O(1) average lookup
 - No ordering requirements
 
-## BTree vs SortedDict
+## BTreeDict vs SortedDict
 
 Benchmark command: `python tests/test_btree_vs_sorteddict.py --benchmark` (Python 3.14.2, default order=8, January 14, 2026).
 
-**BTree advantages**
+**BTreeDict advantages**
 - Inserts and deletes stay faster under heavy churn (e.g., random insert of 100,000 keys: 71.6 ms vs 133.7 ms).
 - Bulk key/value/item materialization tends to be quicker thanks to contiguous node scans (10× keys/values/items over 100,000 keys: 1.55 s vs 1.72 s).
 - Mixed workloads with a blend of updates and deletes favor the C extension structure (mixed 100,000 ops: 69.6 ms vs 78.1 ms).
@@ -210,7 +210,7 @@ Benchmark command: `python tests/test_btree_vs_sorteddict.py --benchmark` (Pytho
 - Uses less memory for large datasets (100,000 keys: ~8.9 MB vs ~11.4 MB measured via tracemalloc).
 - Ships in pure Python, so it builds without a compiler and works on interpreters that cannot load CPython extensions.
 
-In short, prefer `BTree` when writes dominate or you need fast materialization of ordered views, and stick with `SortedDict` for read-heavy or memory-constrained workloads.
+In short, prefer `BTreeDict` when writes dominate or you need fast materialization of ordered views, and stick with `SortedDict` for read-heavy or memory-constrained workloads.
 
 ## Project Structure
 
