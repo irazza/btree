@@ -21,7 +21,7 @@ import os
 import time
 import tracemalloc
 import unittest
-from typing import Dict, List, Tuple, Any
+from typing import List, Tuple
 
 # Add parent directory to path for in-place builds
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -291,10 +291,6 @@ def benchmark_insert_random(n: int) -> BenchmarkResult:
     btree_time = time.perf_counter() - start
     
     # SortedDict
-    random.seed(42)
-    keys = list(range(n))
-    random.shuffle(keys)
-    
     sd = SortedDict()
     start = time.perf_counter()
     for k in keys:

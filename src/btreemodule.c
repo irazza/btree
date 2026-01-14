@@ -15,9 +15,11 @@
 #define PY_SSIZE_T_CLEAN
 #include <Python.h>
 #include <structmember.h>
+#include <math.h>
+#include "longintrepr.h"
 
 /* Default minimum degree (order) of the B-tree */
-#define BTREE_DEFAULT_ORDER 3
+#define BTREE_DEFAULT_ORDER 8
 #define BTREE_MIN_ORDER 2
 
 /* ==================== BTreeNode Implementation ==================== */
@@ -251,17 +253,58 @@ compare_keys(PyObject *a, PyObject *b)
     
     /* For integers, use optimized comparison */
     if (PyLong_CheckExact(a) && PyLong_CheckExact(b)) {
-        int overflow;
-        long a_val = PyLong_AsLongAndOverflow(a, &overflow);
-        if (!overflow) {
-            long b_val = PyLong_AsLongAndOverflow(b, &overflow);
-            if (!overflow) {
-                if (a_val < b_val) return -1;
-                if (a_val > b_val) return 1;
+        PyLongObject *a_long = (PyLongObject *)a;
+        PyLongObject *b_long = (PyLongObject *)b;
+        Py_ssize_t a_size = Py_SIZE(a_long);
+        Py_ssize_t b_size = Py_SIZE(b_long);
+
+        if (a_size == b_size) {
+            if (a_size == 0) {
                 return 0;
             }
+
+            int sign = a_size > 0 ? 1 : -1;
+            Py_ssize_t digits = Py_ABS(a_size);
+            digit *a_digits = a_long->ob_digit;
+            digit *b_digits = b_long->ob_digit;
+
+            while (--digits >= 0) {
+                digit da = a_digits[digits];
+                digit db = b_digits[digits];
+                if (da != db) {
+                    if (sign > 0) {
+                        return da < db ? -1 : 1;
+                    }
+                    return da > db ? -1 : 1;
+                }
+            }
+            return 0;
         }
-        /* Fall through to general comparison for big integers */
+
+        if (a_size < 0) {
+            if (b_size >= 0) {
+                return -1;
+            }
+            return (-a_size > -b_size) ? -1 : 1;
+        }
+
+        if (b_size < 0) {
+            return 1;
+        }
+
+        return (a_size < b_size) ? -1 : 1;
+    }
+
+    /* For floats, use direct double comparison when not NaN */
+    if (PyFloat_CheckExact(a) && PyFloat_CheckExact(b)) {
+        double a_val = PyFloat_AS_DOUBLE(a);
+        double b_val = PyFloat_AS_DOUBLE(b);
+        if (!Py_IS_NAN(a_val) && !Py_IS_NAN(b_val)) {
+            if (a_val < b_val) return -1;
+            if (a_val > b_val) return 1;
+            return 0;
+        }
+        /* If NaN encountered, fall back to Python semantics below */
     }
     
     /* For strings, use optimized comparison */
@@ -516,9 +559,7 @@ merge_children(PyBTreeNode *node, Py_ssize_t idx)
 {
     PyBTreeNode *child = node->children[idx];
     PyBTreeNode *sibling = node->children[idx + 1];
-    int order = node->order;
-    Py_ssize_t t = order;
-    Py_ssize_t i;
+    Py_ssize_t t = node->order;
 
     /* Move key from parent to child */
     child->keys[t - 1] = node->keys[idx];
@@ -676,8 +717,7 @@ static int
 delete_from_internal(PyBTreeNode *node, Py_ssize_t idx)
 {
     PyObject *key = node->keys[idx];
-    int order = node->order;
-    Py_ssize_t t = order;
+    Py_ssize_t t = node->order;
 
     if (node->children[idx]->n_keys >= t) {
         /* Get predecessor and replace */
@@ -735,8 +775,7 @@ delete_from_node(PyBTreeNode *node, PyObject *key)
         }
 
         int last_child = (idx == node->n_keys);
-        int order = node->order;
-        Py_ssize_t t = order;
+        Py_ssize_t t = node->order;
 
         if (node->children[idx]->n_keys < t) {
             fill_child(node, idx);
@@ -917,102 +956,6 @@ PyBTree_Contains(PyObject *self, PyObject *key)
     }
 
     return node_contains(btree->root, key);
-}
-
-/* Helper to collect all keys in sorted order */
-static int
-collect_keys(PyBTreeNode *node, PyObject *list)
-{
-    Py_ssize_t i;
-
-    if (node == NULL) {
-        return 0;
-    }
-
-    for (i = 0; i < node->n_keys; i++) {
-        if (!node->is_leaf && node->children[i]) {
-            if (collect_keys(node->children[i], list) < 0) {
-                return -1;
-            }
-        }
-        if (PyList_Append(list, node->keys[i]) < 0) {
-            return -1;
-        }
-    }
-
-    if (!node->is_leaf && node->children[node->n_keys]) {
-        if (collect_keys(node->children[node->n_keys], list) < 0) {
-            return -1;
-        }
-    }
-
-    return 0;
-}
-
-/* Helper to collect all values in key-sorted order */
-static int
-collect_values(PyBTreeNode *node, PyObject *list)
-{
-    Py_ssize_t i;
-
-    if (node == NULL) {
-        return 0;
-    }
-
-    for (i = 0; i < node->n_keys; i++) {
-        if (!node->is_leaf && node->children[i]) {
-            if (collect_values(node->children[i], list) < 0) {
-                return -1;
-            }
-        }
-        if (PyList_Append(list, node->values[i]) < 0) {
-            return -1;
-        }
-    }
-
-    if (!node->is_leaf && node->children[node->n_keys]) {
-        if (collect_values(node->children[node->n_keys], list) < 0) {
-            return -1;
-        }
-    }
-
-    return 0;
-}
-
-/* Helper to collect all items in sorted order */
-static int
-collect_items(PyBTreeNode *node, PyObject *list)
-{
-    Py_ssize_t i;
-
-    if (node == NULL) {
-        return 0;
-    }
-
-    for (i = 0; i < node->n_keys; i++) {
-        if (!node->is_leaf && node->children[i]) {
-            if (collect_items(node->children[i], list) < 0) {
-                return -1;
-            }
-        }
-        PyObject *tuple = PyTuple_Pack(2, node->keys[i], node->values[i]);
-        if (tuple == NULL) {
-            return -1;
-        }
-        if (PyList_Append(list, tuple) < 0) {
-            Py_DECREF(tuple);
-            return -1;
-        }
-        Py_DECREF(tuple);
-    }
-
-    if (!node->is_leaf && node->children[node->n_keys]) {
-        if (collect_items(node->children[node->n_keys], list) < 0) {
-            return -1;
-        }
-    }
-
-    return 0;
 }
 
 /* Optimized helper to collect keys with pre-allocated index */
@@ -1650,7 +1593,6 @@ typedef struct {
     PyObject *max_key;              /* Maximum key (exclusive), NULL for no max */
     int inclusive_min;              /* Include min_key */
     int inclusive_max;              /* Include max_key */
-    int reverse;                    /* Iterate in reverse order */
     Py_ssize_t stack_top;           /* Top of stack (-1 = empty) */
     IterStackFrame stack[ITER_STACK_SIZE];  /* Stack for tree traversal */
     int started;                    /* Whether iteration has started */
@@ -1677,33 +1619,6 @@ btreerangeiter_traverse(PyObject *self, visitproc visit, void *arg)
     Py_VISIT(it->min_key);
     Py_VISIT(it->max_key);
     return 0;
-}
-
-/* Check if key is within range bounds */
-static int
-key_in_range(PyBTreeRangeIterObject *it, PyObject *key)
-{
-    if (it->min_key != NULL) {
-        int cmp = compare_keys(key, it->min_key);
-        if (cmp == -2) return -1;  /* Error */
-        if (it->inclusive_min) {
-            if (cmp < 0) return 0;  /* key < min, out of range */
-        } else {
-            if (cmp <= 0) return 0;  /* key <= min, out of range */
-        }
-    }
-    
-    if (it->max_key != NULL) {
-        int cmp = compare_keys(key, it->max_key);
-        if (cmp == -2) return -1;  /* Error */
-        if (it->inclusive_max) {
-            if (cmp > 0) return 0;  /* key > max, out of range */
-        } else {
-            if (cmp >= 0) return 0;  /* key >= max, out of range */
-        }
-    }
-    
-    return 1;  /* In range */
 }
 
 /* Descend to first key >= min_key (or leftmost if no min) */
@@ -1907,7 +1822,6 @@ btree_irange(PyObject *self, PyObject *args, PyObject *kwds)
     Py_XINCREF(it->max_key);
     it->inclusive_min = inclusive_min;
     it->inclusive_max = inclusive_max;
-    it->reverse = 0;
     it->stack_top = -1;
     it->started = 0;
     
@@ -2545,13 +2459,13 @@ static PyMappingMethods btree_as_mapping = {
 /* ==================== BTree __init__ ==================== */
 
 PyDoc_STRVAR(btree_doc,
-"BTree(order=3, /)\n"
+"BTree(order=8, /)\n"
 "--\n\n"
 "Create a new B-tree with the specified order (minimum degree).\n\n"
 "The order determines the minimum and maximum number of keys in each node:\n"
 "- Each node (except root) has at least order-1 keys\n"
 "- Each node has at most 2*order-1 keys\n"
-"- Default order is 3 (like a 2-3-4 tree with 2-5 keys per node)\n\n"
+"- Default order is 8 (up to 15 keys per node)\n\n"
 "Example:\n"
 "    >>> bt = BTree()\n"
 "    >>> bt[1] = 'one'\n"

@@ -36,7 +36,7 @@ python setup.py build_ext --inplace
 ```python
 from btree import BTree
 
-# Create a B-tree (default order=3)
+# Create a B-tree (default order=8)
 bt = BTree()
 
 # Insert key-value pairs
@@ -90,11 +90,11 @@ print(len(bt))      # 0
 
 ## API Reference
 
-### `BTree(order=3)`
+### `BTree(order=8)`
 
 Create a new B-tree with the specified order (minimum degree).
 
-- **order**: The minimum degree of the B-tree (default: 3)
+- **order**: The minimum degree of the B-tree (default: 8)
   - Each node has at most `2*order - 1` keys
   - Each node (except root) has at least `order - 1` keys
   - Must be >= 2
@@ -165,13 +165,13 @@ A B-tree of order `t` has the following properties:
 
 - **Small order (2-4)**: More balanced, more memory overhead per item
 - **Large order (16-64)**: Better cache locality, good for disk-based storage
-- **Default (3)**: Good general-purpose choice
+- **Default (8)**: Good general-purpose choice for in-memory workloads
 
 ```python
-# For in-memory use with many items
-bt = BTree(order=16)
+# For in-memory use with many items (default)
+bt = BTree()
 
-# For small datasets
+# For smaller datasets or tight memory constraints
 bt = BTree(order=3)
 ```
 
@@ -195,6 +195,22 @@ Use **B-Tree** when you need:
 Use **dict** when you need:
 - Fastest possible O(1) average lookup
 - No ordering requirements
+
+## BTree vs SortedDict
+
+Benchmark command: `python tests/test_btree_vs_sorteddict.py --benchmark` (Python 3.14.2, default order=8, January 14, 2026).
+
+**BTree advantages**
+- Inserts and deletes stay faster under heavy churn (e.g., random insert of 100,000 keys: 71.6 ms vs 133.7 ms).
+- Bulk key/value/item materialization tends to be quicker thanks to contiguous node scans (10× keys/values/items over 100,000 keys: 1.55 s vs 1.72 s).
+- Mixed workloads with a blend of updates and deletes favor the C extension structure (mixed 100,000 ops: 69.6 ms vs 78.1 ms).
+
+**SortedDict advantages**
+- Point lookups, membership checks, and iteration remain significantly faster thanks to its list-based indexing strategy (random lookup of 100,000 keys: 16.8 ms vs 80.7 ms).
+- Uses less memory for large datasets (100,000 keys: ~8.9 MB vs ~11.4 MB measured via tracemalloc).
+- Ships in pure Python, so it builds without a compiler and works on interpreters that cannot load CPython extensions.
+
+In short, prefer `BTree` when writes dominate or you need fast materialization of ordered views, and stick with `SortedDict` for read-heavy or memory-constrained workloads.
 
 ## Project Structure
 

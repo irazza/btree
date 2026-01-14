@@ -16,7 +16,6 @@ import sys
 import os
 import unittest
 import weakref
-import copy
 
 # Add parent directory to path for in-place builds
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
