@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Comparison tests between BTree and SortedDict from sortedcontainers.
+Comparison tests between BTreeDict and SortedDict from sortedcontainers.
 
 This module compares:
 1. Correctness - Both implementations should produce identical results
@@ -26,7 +26,7 @@ from typing import List, Tuple
 # Add parent directory to path for in-place builds
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from btree import BTree
+from btree import BTreeDict
 from sortedcontainers import SortedDict
 
 
@@ -35,11 +35,11 @@ from sortedcontainers import SortedDict
 # =============================================================================
 
 class CorrectnessTest(unittest.TestCase):
-    """Test that BTree and SortedDict produce identical results."""
+    """Test that BTreeDict and SortedDict produce identical results."""
 
     def test_insert_sequential(self):
         """Test sequential insertions produce same results."""
-        bt = BTree()
+        bt = BTreeDict()
         sd = SortedDict()
         
         for i in range(1000):
@@ -53,7 +53,7 @@ class CorrectnessTest(unittest.TestCase):
 
     def test_insert_reverse(self):
         """Test reverse insertions produce same results."""
-        bt = BTree()
+        bt = BTreeDict()
         sd = SortedDict()
         
         for i in range(999, -1, -1):
@@ -66,7 +66,7 @@ class CorrectnessTest(unittest.TestCase):
 
     def test_insert_random(self):
         """Test random insertions produce same results."""
-        bt = BTree()
+        bt = BTreeDict()
         sd = SortedDict()
         
         random.seed(42)
@@ -83,7 +83,7 @@ class CorrectnessTest(unittest.TestCase):
 
     def test_update_existing_keys(self):
         """Test updating existing keys produces same results."""
-        bt = BTree()
+        bt = BTreeDict()
         sd = SortedDict()
         
         # Insert
@@ -102,7 +102,7 @@ class CorrectnessTest(unittest.TestCase):
 
     def test_delete_operations(self):
         """Test delete operations produce same results."""
-        bt = BTree()
+        bt = BTreeDict()
         sd = SortedDict()
         
         # Insert
@@ -121,7 +121,7 @@ class CorrectnessTest(unittest.TestCase):
 
     def test_mixed_operations(self):
         """Test mixed insert/update/delete operations."""
-        bt = BTree()
+        bt = BTreeDict()
         sd = SortedDict()
         
         random.seed(123)
@@ -145,7 +145,7 @@ class CorrectnessTest(unittest.TestCase):
 
     def test_get_method(self):
         """Test get() method produces same results."""
-        bt = BTree()
+        bt = BTreeDict()
         sd = SortedDict()
         
         for i in range(0, 100, 2):  # Insert even numbers only
@@ -158,7 +158,7 @@ class CorrectnessTest(unittest.TestCase):
 
     def test_contains(self):
         """Test membership testing produces same results."""
-        bt = BTree()
+        bt = BTreeDict()
         sd = SortedDict()
         
         for i in range(0, 100, 2):
@@ -170,7 +170,7 @@ class CorrectnessTest(unittest.TestCase):
 
     def test_min_max(self):
         """Test min/max operations."""
-        bt = BTree()
+        bt = BTreeDict()
         sd = SortedDict()
         
         random.seed(456)
@@ -185,7 +185,7 @@ class CorrectnessTest(unittest.TestCase):
 
     def test_pop_method(self):
         """Test pop() method produces same results."""
-        bt = BTree()
+        bt = BTreeDict()
         sd = SortedDict()
         
         for i in range(100):
@@ -208,7 +208,7 @@ class CorrectnessTest(unittest.TestCase):
 
     def test_string_keys(self):
         """Test with string keys."""
-        bt = BTree()
+        bt = BTreeDict()
         sd = SortedDict()
         
         words = ['apple', 'banana', 'cherry', 'date', 'elderberry', 
@@ -223,7 +223,7 @@ class CorrectnessTest(unittest.TestCase):
 
     def test_tuple_keys(self):
         """Test with tuple keys."""
-        bt = BTree()
+        bt = BTreeDict()
         sd = SortedDict()
         
         for i in range(10):
@@ -251,17 +251,17 @@ class BenchmarkResult:
         self.speedup = sorteddict_time / btree_time if btree_time > 0 else 0
     
     def __str__(self):
-        time_winner = "BTree" if self.btree_time < self.sorteddict_time else "SortedDict"
+        time_winner = "BTreeDict" if self.btree_time < self.sorteddict_time else "SortedDict"
         return (f"{self.name}:\n"
-                f"  BTree:      {self.btree_time*1000:8.2f} ms\n"
+                f"  BTreeDict:      {self.btree_time*1000:8.2f} ms\n"
                 f"  SortedDict: {self.sorteddict_time*1000:8.2f} ms\n"
                 f"  Speedup:    {self.speedup:.2f}x ({time_winner} faster)")
 
 
 def benchmark_insert_sequential(n: int) -> BenchmarkResult:
     """Benchmark sequential insertions."""
-    # BTree
-    bt = BTree()
+    # BTreeDict
+    bt = BTreeDict()
     start = time.perf_counter()
     for i in range(n):
         bt[i] = i
@@ -283,8 +283,8 @@ def benchmark_insert_random(n: int) -> BenchmarkResult:
     keys = list(range(n))
     random.shuffle(keys)
     
-    # BTree
-    bt = BTree()
+    # BTreeDict
+    bt = BTreeDict()
     start = time.perf_counter()
     for k in keys:
         bt[k] = k
@@ -303,7 +303,7 @@ def benchmark_insert_random(n: int) -> BenchmarkResult:
 def benchmark_lookup(n: int) -> BenchmarkResult:
     """Benchmark key lookups."""
     # Setup
-    bt = BTree()
+    bt = BTreeDict()
     sd = SortedDict()
     for i in range(n):
         bt[i] = i
@@ -312,7 +312,7 @@ def benchmark_lookup(n: int) -> BenchmarkResult:
     random.seed(42)
     lookup_keys = [random.randint(0, n-1) for _ in range(n)]
     
-    # BTree
+    # BTreeDict
     start = time.perf_counter()
     for k in lookup_keys:
         _ = bt[k]
@@ -330,14 +330,14 @@ def benchmark_lookup(n: int) -> BenchmarkResult:
 def benchmark_contains(n: int) -> BenchmarkResult:
     """Benchmark membership testing."""
     # Setup
-    bt = BTree()
+    bt = BTreeDict()
     sd = SortedDict()
     for i in range(0, n, 2):  # Insert even numbers
         bt[i] = i
         sd[i] = i
     
     # Test all numbers (half will be missing)
-    # BTree
+    # BTreeDict
     start = time.perf_counter()
     for i in range(n):
         _ = i in bt
@@ -355,13 +355,13 @@ def benchmark_contains(n: int) -> BenchmarkResult:
 def benchmark_iteration(n: int) -> BenchmarkResult:
     """Benchmark full iteration."""
     # Setup
-    bt = BTree()
+    bt = BTreeDict()
     sd = SortedDict()
     for i in range(n):
         bt[i] = i
         sd[i] = i
     
-    # BTree
+    # BTreeDict
     start = time.perf_counter()
     for _ in range(10):
         for k in bt:
@@ -384,12 +384,12 @@ def benchmark_delete_random(n: int) -> BenchmarkResult:
     delete_order = list(range(n))
     random.shuffle(delete_order)
     
-    # Setup BTree
-    bt = BTree()
+    # Setup BTreeDict
+    bt = BTreeDict()
     for i in range(n):
         bt[i] = i
     
-    # BTree deletions
+    # BTreeDict deletions
     start = time.perf_counter()
     for k in delete_order:
         del bt[k]
@@ -423,8 +423,8 @@ def benchmark_mixed_operations(n: int) -> BenchmarkResult:
         value = random.randint(0, 10000)
         operations.append((op, key, value))
     
-    # BTree
-    bt = BTree()
+    # BTreeDict
+    bt = BTreeDict()
     start = time.perf_counter()
     for op, key, value in operations:
         if op == 'insert':
@@ -455,13 +455,13 @@ def benchmark_mixed_operations(n: int) -> BenchmarkResult:
 def benchmark_update(n: int) -> BenchmarkResult:
     """Benchmark updating existing keys."""
     # Setup
-    bt = BTree()
+    bt = BTreeDict()
     sd = SortedDict()
     for i in range(n):
         bt[i] = i
         sd[i] = i
     
-    # BTree updates
+    # BTreeDict updates
     start = time.perf_counter()
     for i in range(n):
         bt[i] = i * 2
@@ -479,13 +479,13 @@ def benchmark_update(n: int) -> BenchmarkResult:
 def benchmark_keys_values_items(n: int) -> BenchmarkResult:
     """Benchmark keys(), values(), items() methods."""
     # Setup
-    bt = BTree()
+    bt = BTreeDict()
     sd = SortedDict()
     for i in range(n):
         bt[i] = i
         sd[i] = i
     
-    # BTree
+    # BTreeDict
     start = time.perf_counter()
     for _ in range(100):
         _ = bt.keys()
@@ -509,12 +509,12 @@ def benchmark_keys_values_items(n: int) -> BenchmarkResult:
 # =============================================================================
 
 def benchmark_memory(n: int) -> Tuple[int, int]:
-    """Compare memory usage between BTree and SortedDict."""
+    """Compare memory usage between BTreeDict and SortedDict."""
     gc.collect()
     
-    # BTree memory
+    # BTreeDict memory
     tracemalloc.start()
-    bt = BTree()
+    bt = BTreeDict()
     for i in range(n):
         bt[i] = i
     btree_current, btree_peak = tracemalloc.get_traced_memory()
@@ -550,12 +550,12 @@ def format_bytes(b: int) -> str:
 def run_benchmarks():
     """Run all benchmarks and print results."""
     print("=" * 70)
-    print("BTree vs SortedDict Comparison")
+    print("BTreeDict vs SortedDict Comparison")
     print("=" * 70)
     
     # Warmup
     print("\nWarming up...")
-    bt = BTree()
+    bt = BTreeDict()
     sd = SortedDict()
     for i in range(1000):
         bt[i] = i
@@ -602,10 +602,10 @@ def run_benchmarks():
     for size in [10_000, 100_000, 500_000]:
         btree_mem, sorteddict_mem = benchmark_memory(size)
         ratio = sorteddict_mem / btree_mem if btree_mem > 0 else 0
-        winner = "BTree" if btree_mem < sorteddict_mem else "SortedDict"
+        winner = "BTreeDict" if btree_mem < sorteddict_mem else "SortedDict"
         
         print(f"\nMemory for {size:,} items:")
-        print(f"  BTree:      {format_bytes(btree_mem)}")
+        print(f"  BTreeDict:      {format_bytes(btree_mem)}")
         print(f"  SortedDict: {format_bytes(sorteddict_mem)}")
         print(f"  Ratio:      {ratio:.2f}x ({winner} more efficient)")
     
@@ -619,12 +619,12 @@ def run_benchmarks():
     avg_speedup = sum(r.speedup for r in results) / len(results) if results else 0
     
     print(f"\nTotal benchmarks: {len(results)}")
-    print(f"BTree wins:       {btree_wins}")
+    print(f"BTreeDict wins:       {btree_wins}")
     print(f"SortedDict wins:  {sorteddict_wins}")
     print(f"Average speedup:  {avg_speedup:.2f}x")
     
     if avg_speedup > 1:
-        print("\nOverall: BTree is faster on average")
+        print("\nOverall: BTreeDict is faster on average")
     else:
         print("\nOverall: SortedDict is faster on average")
 
@@ -637,44 +637,44 @@ class SpeedComparisonTest(unittest.TestCase):
     """Speed comparison tests (for pytest)."""
     
     def test_insert_not_too_slow(self):
-        """Ensure BTree insert is not more than 5x slower than SortedDict."""
+        """Ensure BTreeDict insert is not more than 5x slower than SortedDict."""
         result = benchmark_insert_random(10000)
         self.assertGreater(result.speedup, 0.2,
-            f"BTree insert is too slow: {result.speedup:.2f}x")
+            f"BTreeDict insert is too slow: {result.speedup:.2f}x")
     
     def test_lookup_not_too_slow(self):
-        """Ensure BTree lookup is not more than 2x slower than SortedDict.
+        """Ensure BTreeDict lookup is not more than 2x slower than SortedDict.
         
         Note: SortedDict uses highly optimized Cython with hash-based index lookup,
-        while BTree must traverse nodes with Python comparison API calls.
+        while BTreeDict must traverse nodes with Python comparison API calls.
         This is an inherent trade-off for maintaining sorted order.
         """
         result = benchmark_lookup(10000)
         self.assertGreater(result.speedup, 0.02,
-            f"BTree lookup is too slow: {result.speedup:.2f}x")
+            f"BTreeDict lookup is too slow: {result.speedup:.2f}x")
     
     def test_delete_not_too_slow(self):
-        """Ensure BTree delete is not more than 5x slower than SortedDict."""
+        """Ensure BTreeDict delete is not more than 5x slower than SortedDict."""
         result = benchmark_delete_random(10000)
         self.assertGreater(result.speedup, 0.2,
-            f"BTree delete is too slow: {result.speedup:.2f}x")
+            f"BTreeDict delete is too slow: {result.speedup:.2f}x")
 
 
 class MemoryComparisonTest(unittest.TestCase):
     """Memory comparison tests (for pytest)."""
     
     def test_memory_not_excessive(self):
-        """Ensure BTree doesn't use more than 3x the memory of SortedDict."""
+        """Ensure BTreeDict doesn't use more than 3x the memory of SortedDict."""
         btree_mem, sorteddict_mem = benchmark_memory(10000)
         ratio = btree_mem / sorteddict_mem if sorteddict_mem > 0 else float('inf')
         self.assertLess(ratio, 3.0,
-            f"BTree uses too much memory: {ratio:.2f}x of SortedDict")
+            f"BTreeDict uses too much memory: {ratio:.2f}x of SortedDict")
 
 
 if __name__ == '__main__':
     import argparse
     
-    parser = argparse.ArgumentParser(description='BTree vs SortedDict comparison')
+    parser = argparse.ArgumentParser(description='BTreeDict vs SortedDict comparison')
     parser.add_argument('--test', action='store_true', 
                         help='Run correctness tests only')
     parser.add_argument('--benchmark', action='store_true',

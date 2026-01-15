@@ -18,9 +18,9 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 def test_basic_operations():
     """Test basic insert, search, delete operations."""
-    from btree import BTree
+    from btree import BTreeDict
     
-    bt = BTree()
+    bt = BTreeDict()
     
     # Test empty tree
     assert len(bt) == 0
@@ -55,9 +55,9 @@ def test_basic_operations():
 
 def test_sorted_iteration():
     """Test that keys are iterated in sorted order."""
-    from btree import BTree
+    from btree import BTreeDict
     
-    bt = BTree()
+    bt = BTreeDict()
     keys = [5, 3, 8, 1, 4, 7, 2, 6]
     
     for k in keys:
@@ -79,9 +79,9 @@ def test_sorted_iteration():
 
 def test_min_max():
     """Test min() and max() methods."""
-    from btree import BTree
+    from btree import BTreeDict
     
-    bt = BTree()
+    bt = BTreeDict()
     
     # Test empty tree
     try:
@@ -106,9 +106,9 @@ def test_min_max():
 
 def test_get_method():
     """Test get() method with default values."""
-    from btree import BTree
+    from btree import BTreeDict
     
-    bt = BTree()
+    bt = BTreeDict()
     bt[1] = "one"
     bt[2] = "two"
     
@@ -120,9 +120,9 @@ def test_get_method():
 
 def test_pop_method():
     """Test pop() method."""
-    from btree import BTree
+    from btree import BTreeDict
     
-    bt = BTree()
+    bt = BTreeDict()
     bt[1] = "one"
     bt[2] = "two"
     bt[3] = "three"
@@ -147,9 +147,9 @@ def test_pop_method():
 
 def test_clear():
     """Test clear() method."""
-    from btree import BTree
+    from btree import BTreeDict
     
-    bt = BTree()
+    bt = BTreeDict()
     for i in range(100):
         bt[i] = i
     
@@ -166,10 +166,10 @@ def test_clear():
 
 def test_different_orders():
     """Test B-trees with different orders."""
-    from btree import BTree
+    from btree import BTreeDict
     
     for order in [2, 3, 5, 10, 50]:
-        bt = BTree(order=order)
+        bt = BTreeDict(order=order)
         
         # Insert many items
         for i in range(1000):
@@ -183,16 +183,16 @@ def test_different_orders():
 
 def test_invalid_order():
     """Test that invalid order raises ValueError."""
-    from btree import BTree
+    from btree import BTreeDict
     
     try:
-        bt = BTree(order=1)
+        bt = BTreeDict(order=1)
         assert False, "Should raise ValueError"
     except ValueError:
         pass
     
     try:
-        bt = BTree(order=0)
+        bt = BTreeDict(order=0)
         assert False, "Should raise ValueError"
     except ValueError:
         pass
@@ -200,9 +200,9 @@ def test_invalid_order():
 
 def test_key_error():
     """Test KeyError for missing keys."""
-    from btree import BTree
+    from btree import BTreeDict
     
-    bt = BTree()
+    bt = BTreeDict()
     bt[1] = "one"
     
     try:
@@ -220,17 +220,17 @@ def test_key_error():
 
 def test_various_key_types():
     """Test with different key types."""
-    from btree import BTree
+    from btree import BTreeDict
     
     # String keys
-    bt = BTree()
+    bt = BTreeDict()
     bt["apple"] = 1
     bt["banana"] = 2
     bt["cherry"] = 3
     assert bt.keys() == ["apple", "banana", "cherry"]
     
     # Float keys
-    bt2 = BTree()
+    bt2 = BTreeDict()
     bt2[3.14] = "pi"
     bt2[2.71] = "e"
     bt2[1.41] = "sqrt2"
@@ -240,10 +240,10 @@ def test_various_key_types():
 
 def test_large_dataset():
     """Test with a large number of items."""
-    from btree import BTree
+    from btree import BTreeDict
     import random
     
-    bt = BTree(order=16)
+    bt = BTreeDict(order=16)
     n = 10000
     
     # Insert in random order
@@ -272,14 +272,14 @@ def test_large_dataset():
 
 def test_repr():
     """Test string representation."""
-    from btree import BTree
+    from btree import BTreeDict
     
-    bt = BTree(order=5)
+    bt = BTreeDict(order=5)
     for i in range(10):
         bt[i] = i
     
     r = repr(bt)
-    assert "BTree" in r
+    assert "BTreeDict" in r
     assert "order=5" in r
     assert "size=10" in r
 
@@ -321,7 +321,7 @@ def run_all_tests():
 
 if __name__ == "__main__":
     try:
-        from btree import BTree
+        from btree import BTreeDict
     except ImportError:
         print("Error: btree module not found.")
         print("Build it first with:")

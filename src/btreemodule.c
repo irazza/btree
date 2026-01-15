@@ -15,8 +15,6 @@
 #define PY_SSIZE_T_CLEAN
 #include <Python.h>
 #include <structmember.h>
-#include <math.h>
-#include "longintrepr.h"
 
 /* Default minimum degree (order) of the B-tree */
 #define BTREE_DEFAULT_ORDER 8
@@ -1245,7 +1243,7 @@ static PyObject *
 btree_repr(PyObject *self)
 {
     PyBTreeObject *btree = (PyBTreeObject *)self;
-    return PyUnicode_FromFormat("BTree(order=%d, size=%zd)",
+    return PyUnicode_FromFormat("BTreeDict(order=%d, size=%zd)",
                                 btree->order, btree->size);
 }
 
@@ -1285,7 +1283,7 @@ btree_ass_subscript(PyObject *self, PyObject *key, PyObject *value)
     }
 }
 
-/* ==================== BTree Iterator ==================== */
+/* ==================== BTreeDict Iterator ==================== */
 
 /* Stack-based iterator for efficient in-order traversal without copying */
 #define ITER_STACK_SIZE 64  /* Max tree depth - sufficient for huge trees */
@@ -1770,7 +1768,7 @@ PyDoc_STRVAR(btree_irange_doc,
 "    max: Maximum key (exclusive by default). None for no maximum.\n"
 "    inclusive: Tuple of (min_inclusive, max_inclusive) booleans.\n\n"
 "Example:\n"
-"    >>> bt = BTree()\n"
+"    >>> bt = BTreeDict()\n"
 "    >>> for i in range(10): bt[i] = i\n"
 "    >>> list(bt.irange(3, 7))\n"
 "    [3, 4, 5, 6]\n"
@@ -2095,8 +2093,7 @@ btree_update_common(PyObject *self, PyObject *args, PyObject *kwds)
 
     if (arg != NULL) {
         if (PyBTree_Check(arg)) {
-            /* Fast path: merge from another BTree */
-            PyBTreeObject *other = (PyBTreeObject *)arg;
+            /* Fast path: merge from another BTreeDict */
             PyObject *items = PyBTree_Items(arg);
             if (items == NULL)
                 return -1;
@@ -2233,7 +2230,7 @@ btree_richcompare(PyObject *self, PyObject *other, int op)
         Py_RETURN_NOTIMPLEMENTED;
     }
 
-    /* Must be comparing two BTrees */
+    /* Must be comparing two BTreeDicts */
     if (!PyBTree_Check(other)) {
         if (op == Py_EQ) {
             Py_RETURN_FALSE;
@@ -2456,10 +2453,10 @@ static PyMappingMethods btree_as_mapping = {
     btree_ass_subscript,                        /* mp_ass_subscript */
 };
 
-/* ==================== BTree __init__ ==================== */
+/* ==================== BTreeDict __init__ ==================== */
 
 PyDoc_STRVAR(btree_doc,
-"BTree(order=8, /)\n"
+"BTreeDict(order=8, /)\n"
 "--\n\n"
 "Create a new B-tree with the specified order (minimum degree).\n\n"
 "The order determines the minimum and maximum number of keys in each node:\n"
@@ -2467,7 +2464,7 @@ PyDoc_STRVAR(btree_doc,
 "- Each node has at most 2*order-1 keys\n"
 "- Default order is 8 (up to 15 keys per node)\n\n"
 "Example:\n"
-"    >>> bt = BTree()\n"
+"    >>> bt = BTreeDict()\n"
 "    >>> bt[1] = 'one'\n"
 "    >>> bt[2] = 'two'\n"
 "    >>> bt[1]\n"
@@ -2531,7 +2528,7 @@ btree_new(PyTypeObject *type, PyObject *args, PyObject *kwds)
 
 static PyTypeObject PyBTree_Type = {
     PyVarObject_HEAD_INIT(NULL, 0)
-    "btree.BTree",                              /* tp_name */
+    "btree.BTreeDict",                          /* tp_name */
     sizeof(PyBTreeObject),                      /* tp_basicsize */
     0,                                          /* tp_itemsize */
     btree_dealloc,                              /* tp_dealloc */
@@ -2616,9 +2613,9 @@ PyInit_btree(void)
         return NULL;
     }
 
-    /* Add the BTree type to the module */
+    /* Add the BTreeDict type to the module */
     Py_INCREF(&PyBTree_Type);
-    if (PyModule_AddObject(m, "BTree", (PyObject *)&PyBTree_Type) < 0) {
+    if (PyModule_AddObject(m, "BTreeDict", (PyObject *)&PyBTree_Type) < 0) {
         Py_DECREF(&PyBTree_Type);
         Py_DECREF(m);
         return NULL;
