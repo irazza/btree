@@ -248,48 +248,24 @@ compare_keys(PyObject *a, PyObject *b)
         return 0;
     }
     
-    /* For integers, use optimized comparison */
+    /* For integers, use rich comparison (avoid accessing internal ob_digit for Python 3.12+ compatibility) */
     if (PyLong_CheckExact(a) && PyLong_CheckExact(b)) {
-        PyLongObject *a_long = (PyLongObject *)a;
-        PyLongObject *b_long = (PyLongObject *)b;
-        Py_ssize_t a_size = Py_SIZE(a_long);
-        Py_ssize_t b_size = Py_SIZE(b_long);
-
-        if (a_size == b_size) {
-            if (a_size == 0) {
-                return 0;
-            }
-
-            int sign = a_size > 0 ? 1 : -1;
-            Py_ssize_t digits = Py_ABS(a_size);
-            digit *a_digits = a_long->ob_digit;
-            digit *b_digits = b_long->ob_digit;
-
-            while (--digits >= 0) {
-                digit da = a_digits[digits];
-                digit db = b_digits[digits];
-                if (da != db) {
-                    if (sign > 0) {
-                        return da < db ? -1 : 1;
-                    }
-                    return da > db ? -1 : 1;
-                }
-            }
-            return 0;
+        int result = PyObject_RichCompareBool(a, b, Py_LT);
+        if (result < 0) {
+            return 0;  /* Error in comparison, treat as equal */
         }
-
-        if (a_size < 0) {
-            if (b_size >= 0) {
-                return -1;
-            }
-            return (-a_size > -b_size) ? -1 : 1;
+        if (result) {
+            return -1;  /* a < b */
         }
-
-        if (b_size < 0) {
-            return 1;
+        
+        result = PyObject_RichCompareBool(a, b, Py_EQ);
+        if (result < 0) {
+            return 0;  /* Error in comparison, treat as equal */
         }
-
-        return (a_size < b_size) ? -1 : 1;
+        if (result) {
+            return 0;   /* a == b */
+        }
+        return 1;       /* a > b */
     }
 
     /* For floats, use direct double comparison when not NaN */
@@ -1375,7 +1351,7 @@ btreeiter_len(PyObject *self, PyObject *Py_UNUSED(ignored))
 
 static PyMethodDef btreeiter_methods[] = {
     {"__length_hint__", btreeiter_len, METH_NOARGS, "Private method returning estimate of len(list(it))."},
-    {NULL, NULL}
+    {NULL, NULL, 0, NULL}
 };
 
 static PyTypeObject PyBTreeIter_Type = {
@@ -1521,7 +1497,7 @@ btreereviter_len(PyObject *self, PyObject *Py_UNUSED(ignored))
 
 static PyMethodDef btreereviter_methods[] = {
     {"__length_hint__", btreereviter_len, METH_NOARGS, "Private method returning estimate of len(list(it))."},
-    {NULL, NULL}
+    {NULL, NULL, 0, NULL}
 };
 
 static PyTypeObject PyBTreeReverseIter_Type = {
@@ -2428,7 +2404,7 @@ static PyMethodDef btree_methods[] = {
     {"popitem", btree_popitem, METH_VARARGS, btree_popitem_doc},
     {"irange", (PyCFunction)btree_irange, METH_VARARGS | METH_KEYWORDS, btree_irange_doc},
     {"__reversed__", btree_reversed, METH_NOARGS, "Return a reverse iterator over the keys."},
-    {NULL, NULL}
+    {NULL, NULL, 0, NULL}
 };
 
 /* ==================== Sequence/Mapping Protocols ==================== */
