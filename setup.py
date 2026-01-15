@@ -22,7 +22,7 @@ else:
     extra_link_args = []
 
 btree_module = Extension(
-    'pybtree',
+    'btreedict',
     sources=['src/btreemodule.c'],
     include_dirs=['include'],
     extra_compile_args=extra_compile_args,
@@ -30,7 +30,7 @@ btree_module = Extension(
 )
 
 setup(
-    name='pybtree',
+    name='btreedict',
     version='1.0.0',
     description='B-Tree data structure implemented in C as a Python Extension Module',
     long_description=open('README.md').read(),

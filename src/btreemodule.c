@@ -2548,7 +2548,7 @@ static PyTypeObject PyBTree_Type = {
 
 static struct PyModuleDef btreemodule = {
     PyModuleDef_HEAD_INIT,
-    "pybtree",
+    "btreedict",
     "B-Tree data structure module.\n\n"
     "A B-tree is a self-balancing tree data structure that maintains sorted\n"
     "data and allows searches, sequential access, insertions, and deletions\n"
@@ -2562,7 +2562,7 @@ static struct PyModuleDef btreemodule = {
 };
 
 PyMODINIT_FUNC
-PyInit_pybtree(void)
+PyInit_btreedict(void)
 {
     PyObject *m;
 
