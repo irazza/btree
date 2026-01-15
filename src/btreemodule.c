@@ -2562,7 +2562,7 @@ static struct PyModuleDef btreemodule = {
 };
 
 PyMODINIT_FUNC
-PyInit_btree(void)
+PyInit_pybtree(void)
 {
     PyObject *m;
 
