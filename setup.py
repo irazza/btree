@@ -14,14 +14,19 @@ import sys
 
 # Extra compile args based on platform
 extra_compile_args = []
+extra_link_args = []
 if sys.platform != 'win32':
     extra_compile_args = ['-O3', '-Wall', '-Wextra']
+else:
+    extra_compile_args = ['/O2', '/W3']
+    extra_link_args = []
 
 btree_module = Extension(
     'pybtree',
     sources=['src/btreemodule.c'],
     include_dirs=['include'],
     extra_compile_args=extra_compile_args,
+    extra_link_args=extra_link_args,
 )
 
 setup(
