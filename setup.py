@@ -18,7 +18,7 @@ if sys.platform != 'win32':
     extra_compile_args = ['-O3', '-Wall', '-Wextra']
 
 btree_module = Extension(
-    'btree',
+    'pybtree',
     sources=['src/btreemodule.c'],
     include_dirs=['include'],
     extra_compile_args=extra_compile_args,
@@ -27,7 +27,7 @@ btree_module = Extension(
 setup(
     name='pybtree',
     version='1.0.0',
-    description='B-Tree data structure implemented in C for Python',
+    description='B-Tree data structure implemented in C as a Python Extension Module',
     long_description=open('README.md').read(),
     long_description_content_type='text/markdown',
     author='Alberto',
