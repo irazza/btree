@@ -14,7 +14,6 @@
 
 #define PY_SSIZE_T_CLEAN
 #include <Python.h>
-#include <structmember.h>
 
 /* Default minimum degree (order) of the B-tree */
 #define BTREE_DEFAULT_ORDER 8
