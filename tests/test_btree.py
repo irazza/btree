@@ -18,7 +18,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 def test_basic_operations():
     """Test basic insert, search, delete operations."""
-    from btree import BTreeDict
+    from pybtree import BTreeDict
     
     bt = BTreeDict()
     

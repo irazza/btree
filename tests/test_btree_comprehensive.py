@@ -20,7 +20,7 @@ import weakref
 # Add parent directory to path for in-place builds
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from btree import BTreeDict
+from pybtree import BTreeDict
 
 
 class BTreeDictTest(unittest.TestCase):
