@@ -12,10 +12,17 @@ A high-performance B-Tree implementation written in C as a Python extension modu
 
 ## Installation
 
+### From PyPI
+
+```bash
+pip install btreedict
+```
+
 ### From source
 
 ```bash
-cd /home/irazza/projects/btree
+git clone https://github.com/irazza/btree.git
+cd btree
 pip install .
 ```
 
@@ -34,7 +41,7 @@ python setup.py build_ext --inplace
 ## Quick Start
 
 ```python
-from btree import BTreeDict
+from btreedict import BTreeDict
 
 # Create a B-tree (default order=8)
 bt = BTreeDict()
