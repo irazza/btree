@@ -25,7 +25,7 @@ btree_module = Extension(
 )
 
 setup(
-    name='btree',
+    name='pybtree',
     version='1.0.0',
     description='B-Tree data structure implemented in C for Python',
     long_description=open('README.md').read(),
