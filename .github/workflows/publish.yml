@@ -6,40 +6,33 @@ on:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    name: Build wheels on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        python-version: ["3.11", "3.12", "3.13"]
+        os: [ubuntu-latest, windows-latest, macos-latest]
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
+      - name: Build wheels
+        uses: pypa/cibuildwheel@v2.20.0
+        env:
+          CIBW_BUILD: cp311-* cp312-* cp313-*
+          CIBW_SKIP: "*-win32"
+          CIBW_ARCHS_MACOS: x86_64 arm64
+
+      - uses: actions/upload-artifact@v4
         with:
-          python-version: ${{ matrix.python-version }}
-
-      - name: Install build dependencies
-        run: pip install build wheel
-
-      - name: Build wheel
-        run: python -m build
-
-      - name: Upload artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: dist-${{ matrix.python-version }}
-          path: dist/
+          name: cibw-wheels-${{ matrix.os }}-${{ strategy.job-index }}
+          path: ./wheelhouse/*.whl
 
   publish:
     needs: build
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
+      - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
 
@@ -51,16 +44,19 @@ jobs:
           rm -rf dist
           python -m build
 
-      - name: Download all artifacts
+      - name: Download all wheels
         uses: actions/download-artifact@v4
         with:
-          path: dist-artifacts
+          path: wheelhouse
+          pattern: cibw-wheels-*
+          merge-multiple: true
 
-      - name: Organize dist directory
+      - name: Prepare dist directory
         run: |
           mkdir -p dist
-          find dist-artifacts -name "*.whl" -exec cp {} dist/ \;
-          find dist-artifacts -name "*.tar.gz" -exec cp {} dist/ \;
+          find wheelhouse -name "*.whl" -exec cp {} dist/ \;
+          find . -name "*.tar.gz" -path "*/dist/*" -exec cp {} dist/ \;
+          ls -la dist/
 
       - name: Publish to PyPI
         run: twine upload dist/* --skip-existing
