@@ -31,7 +31,7 @@ btree_module = Extension(
 
 setup(
     name='btreedict',
-    version='1.0.0',
+    version='1.0.1',
     description='B-Tree data structure implemented in C as a Python Extension Module',
     long_description=open('README.md').read(),
     long_description_content_type='text/markdown',
