@@ -198,7 +198,7 @@ Use **dict** when you need:
 
 ## BTreeDict vs SortedDict
 
-Benchmark command: `python tests/test_btree_vs_sorteddict.py --benchmark`
+Benchmark command: `python benchmarks/compare_sorteddict.py --benchmark`
 (Python 3.14.2, default order=64, cache_i64=True, AMD Ryzen AI 7 PRO 350 w/ Radeon 860M, Jan 16, 2026).
 
 ### Speed (10,000 items)
@@ -248,7 +248,7 @@ btree/
 ├── src/
 │   └── btreemodule.c    # Main implementation
 ├── tests/
-│   └── test_btree.py    # Test suite
+│   └── test_btree_comprehensive.py    # Comprehensive test suite
 ├── setup.py             # Build configuration
 ├── pyproject.toml       # Modern Python packaging
 └── README.md            # This file
