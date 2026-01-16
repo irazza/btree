@@ -16,7 +16,7 @@
 #include <Python.h>
 
 /* Default minimum degree (order) of the B-tree */
-#define BTREE_DEFAULT_ORDER 8
+#define BTREE_DEFAULT_ORDER 64
 #define BTREE_MIN_ORDER 2
 
 /* ==================== BTreeNode Implementation ==================== */
@@ -28,24 +28,54 @@ typedef struct _PyBTreeNode {
     PyObject **keys;              /* Array of keys (Python objects) */
     PyObject **values;            /* Array of values (Python objects) */
     struct _PyBTreeNode **children; /* Array of child pointers */
+    long long *keys_i64;           /* Cached int64 key values */
+    unsigned char *keys_i64_valid; /* 1 if keys_i64 entry is valid */
     int order;                    /* Order (t) - needed for node operations */
 } PyBTreeNode;
 
 /* Forward declarations */
 static PyTypeObject PyBTreeNode_Type;
-static PyObject *btreenode_new(int order, int is_leaf);
+static PyObject *btreenode_new(int order, int is_leaf, int cache_i64);
 static void btreenode_dealloc(PyObject *self);
 static int btreenode_traverse(PyObject *self, visitproc visit, void *arg);
 static int btreenode_clear(PyObject *self);
 
+static inline void
+cache_key(PyBTreeNode *node, Py_ssize_t idx, PyObject *key)
+{
+    if (node->keys_i64_valid == NULL) {
+        return;
+    }
+    if (PyLong_CheckExact(key)) {
+        int overflow = 0;
+        long long value = PyLong_AsLongLongAndOverflow(key, &overflow);
+        if (!PyErr_Occurred() && overflow == 0) {
+            node->keys_i64[idx] = value;
+            node->keys_i64_valid[idx] = 1;
+            return;
+        }
+        PyErr_Clear();
+    }
+    node->keys_i64_valid[idx] = 0;
+}
+
+static inline void
+cache_key_clear(PyBTreeNode *node, Py_ssize_t idx)
+{
+    if (node->keys_i64_valid == NULL) {
+        return;
+    }
+    node->keys_i64_valid[idx] = 0;
+}
+
 /* Create a new B-tree node */
 static PyObject *
-btreenode_new(int order, int is_leaf)
+btreenode_new(int order, int is_leaf, int cache_i64)
 {
     PyBTreeNode *node;
     Py_ssize_t max_keys = 2 * order - 1;
     Py_ssize_t max_children = 2 * order;
-    size_t keys_size, values_size, children_size;
+    size_t keys_size, values_size, children_size, keys_i64_size, keys_i64_valid_size;
     char *block;
 
     node = PyObject_GC_New(PyBTreeNode, &PyBTreeNode_Type);
@@ -57,12 +87,21 @@ btreenode_new(int order, int is_leaf)
     node->is_leaf = is_leaf;
     node->order = order;
 
-    /* Allocate arrays for keys, values, and children in one block */
+    /* Allocate arrays for keys, values, children, and int64 cache in one block */
     keys_size = max_keys * sizeof(PyObject *);
     values_size = max_keys * sizeof(PyObject *);
     children_size = is_leaf ? 0 : max_children * sizeof(PyBTreeNode *);
-
-    block = (char *)PyMem_Calloc(1, keys_size + values_size + children_size);
+    if (cache_i64) {
+        keys_i64_size = max_keys * sizeof(long long);
+        keys_i64_valid_size = max_keys * sizeof(unsigned char);
+        block = (char *)PyMem_Calloc(1, keys_size + values_size + children_size +
+                                     keys_i64_size + keys_i64_valid_size);
+    }
+    else {
+        keys_i64_size = 0;
+        keys_i64_valid_size = 0;
+        block = (char *)PyMem_Calloc(1, keys_size + values_size + children_size);
+    }
     if (block == NULL) {
         Py_DECREF(node);
         return PyErr_NoMemory();
@@ -73,8 +112,27 @@ btreenode_new(int order, int is_leaf)
     
     if (!is_leaf) {
         node->children = (PyBTreeNode **)(block + keys_size + values_size);
+        if (cache_i64) {
+            node->keys_i64 = (long long *)(block + keys_size + values_size + children_size);
+        }
+        else {
+            node->keys_i64 = NULL;
+        }
     } else {
         node->children = NULL;
+        if (cache_i64) {
+            node->keys_i64 = (long long *)(block + keys_size + values_size);
+        }
+        else {
+            node->keys_i64 = NULL;
+        }
+    }
+
+    if (cache_i64) {
+        node->keys_i64_valid = (unsigned char *)((char *)node->keys_i64 + keys_i64_size);
+    }
+    else {
+        node->keys_i64_valid = NULL;
     }
 
     PyObject_GC_Track((PyObject *)node);
@@ -150,6 +208,9 @@ btreenode_clear(PyObject *self)
     for (i = 0; i < node->n_keys; i++) {
         Py_CLEAR(node->keys[i]);
         Py_CLEAR(node->values[i]);
+        if (node->keys_i64_valid) {
+            node->keys_i64_valid[i] = 0;
+        }
     }
 
     if (node->children) {
@@ -211,6 +272,7 @@ typedef struct _PyBTreeObject {
     PyBTreeNode *root;           /* Root node of the tree */
     Py_ssize_t size;             /* Total number of key-value pairs */
     int order;                    /* Order (minimum degree) of the B-tree */
+    int cache_i64;                /* Enable int64 key cache */
 } PyBTreeObject;
 
 /* Forward declarations */
@@ -248,19 +310,37 @@ compare_keys(PyObject *a, PyObject *b)
         return 0;
     }
     
-    /* For integers, use rich comparison (avoid accessing internal ob_digit for Python 3.12+ compatibility) */
+    /* For integers, try fast path for values fitting in int64 */
     if (PyLong_CheckExact(a) && PyLong_CheckExact(b)) {
+        int overflow_a = 0, overflow_b = 0;
+        long long a_ll = PyLong_AsLongLongAndOverflow(a, &overflow_a);
+        if (PyErr_Occurred()) {
+            return -2;
+        }
+        if (overflow_a == 0) {
+            long long b_ll = PyLong_AsLongLongAndOverflow(b, &overflow_b);
+            if (PyErr_Occurred()) {
+                return -2;
+            }
+            if (overflow_b == 0) {
+                if (a_ll < b_ll) return -1;
+                if (a_ll > b_ll) return 1;
+                return 0;
+            }
+        }
+
+        /* Fallback for big ints: use rich comparison */
         int result = PyObject_RichCompareBool(a, b, Py_LT);
         if (result < 0) {
-            return 0;  /* Error in comparison, treat as equal */
+            return -2;
         }
         if (result) {
             return -1;  /* a < b */
         }
-        
+
         result = PyObject_RichCompareBool(a, b, Py_EQ);
         if (result < 0) {
-            return 0;  /* Error in comparison, treat as equal */
+            return -2;
         }
         if (result) {
             return 0;   /* a == b */
@@ -323,9 +403,62 @@ node_search_key(PyBTreeNode *node, PyObject *key, int *found)
     Py_ssize_t high = node->n_keys - 1;
     *found = 0;
 
+    int key_is_int64 = 0;
+    long long key_ll = 0;
+    if (PyLong_CheckExact(key)) {
+        int key_overflow = 0;
+        key_ll = PyLong_AsLongLongAndOverflow(key, &key_overflow);
+        if (PyErr_Occurred()) {
+            return -1;
+        }
+        if (key_overflow == 0) {
+            key_is_int64 = 1;
+        }
+    }
+
     while (low <= high) {
         Py_ssize_t mid = low + (high - low) / 2;
-        int cmp = compare_keys(key, node->keys[mid]);
+        int cmp;
+        PyObject *mid_key = node->keys[mid];
+
+        if (key_is_int64 && PyLong_CheckExact(mid_key)) {
+            if (node->keys_i64_valid && node->keys_i64_valid[mid]) {
+                long long mid_ll = node->keys_i64[mid];
+                if (key_ll < mid_ll) {
+                    cmp = -1;
+                }
+                else if (key_ll > mid_ll) {
+                    cmp = 1;
+                }
+                else {
+                    cmp = 0;
+                }
+            }
+            else {
+                int mid_overflow = 0;
+                long long mid_ll = PyLong_AsLongLongAndOverflow(mid_key, &mid_overflow);
+                if (PyErr_Occurred()) {
+                    return -1;
+                }
+                if (mid_overflow == 0) {
+                    if (key_ll < mid_ll) {
+                        cmp = -1;
+                    }
+                    else if (key_ll > mid_ll) {
+                        cmp = 1;
+                    }
+                    else {
+                        cmp = 0;
+                    }
+                }
+                else {
+                    cmp = compare_keys(key, mid_key);
+                }
+            }
+        }
+        else {
+            cmp = compare_keys(key, mid_key);
+        }
         
         if (cmp == -2) {
             return -1;  /* Error */
@@ -382,7 +515,7 @@ split_child(PyBTreeNode *parent, Py_ssize_t child_index)
     Py_ssize_t t = order;
 
     /* Create a new node that will hold the right half */
-    PyBTreeNode *new_node = (PyBTreeNode *)btreenode_new(order, full_child->is_leaf);
+    PyBTreeNode *new_node = (PyBTreeNode *)btreenode_new(order, full_child->is_leaf, full_child->keys_i64_valid != NULL);
     if (new_node == NULL) {
         return -1;
     }
@@ -391,10 +524,17 @@ split_child(PyBTreeNode *parent, Py_ssize_t child_index)
     new_node->n_keys = t - 1;
     memcpy(new_node->keys, &full_child->keys[t], (t - 1) * sizeof(PyObject *));
     memcpy(new_node->values, &full_child->values[t], (t - 1) * sizeof(PyObject *));
+    if (new_node->keys_i64_valid) {
+        memcpy(new_node->keys_i64, &full_child->keys_i64[t], (t - 1) * sizeof(long long));
+        memcpy(new_node->keys_i64_valid, &full_child->keys_i64_valid[t], (t - 1) * sizeof(unsigned char));
+    }
     
     /* Clear moved pointers in full_child to avoid double-free/decref issues */
     memset(&full_child->keys[t], 0, (t - 1) * sizeof(PyObject *));
     memset(&full_child->values[t], 0, (t - 1) * sizeof(PyObject *));
+    if (full_child->keys_i64_valid) {
+        memset(&full_child->keys_i64_valid[t], 0, (t - 1) * sizeof(unsigned char));
+    }
 
     /* Copy children if not a leaf */
     if (!full_child->is_leaf) {
@@ -406,6 +546,10 @@ split_child(PyBTreeNode *parent, Py_ssize_t child_index)
     if (parent->n_keys > child_index) {
         memmove(&parent->keys[child_index + 1], &parent->keys[child_index], (parent->n_keys - child_index) * sizeof(PyObject *));
         memmove(&parent->values[child_index + 1], &parent->values[child_index], (parent->n_keys - child_index) * sizeof(PyObject *));
+        if (parent->keys_i64_valid) {
+            memmove(&parent->keys_i64[child_index + 1], &parent->keys_i64[child_index], (parent->n_keys - child_index) * sizeof(long long));
+            memmove(&parent->keys_i64_valid[child_index + 1], &parent->keys_i64_valid[child_index], (parent->n_keys - child_index) * sizeof(unsigned char));
+        }
     }
     
     if (parent->n_keys + 1 > child_index + 1) {
@@ -415,8 +559,15 @@ split_child(PyBTreeNode *parent, Py_ssize_t child_index)
     /* Insert the middle key into parent */
     parent->keys[child_index] = full_child->keys[t - 1];
     parent->values[child_index] = full_child->values[t - 1];
+    if (parent->keys_i64_valid) {
+        parent->keys_i64[child_index] = full_child->keys_i64[t - 1];
+        parent->keys_i64_valid[child_index] = full_child->keys_i64_valid[t - 1];
+    }
     full_child->keys[t - 1] = NULL;
     full_child->values[t - 1] = NULL;
+    if (full_child->keys_i64_valid) {
+        full_child->keys_i64_valid[t - 1] = 0;
+    }
 
     parent->children[child_index + 1] = new_node;
     full_child->n_keys = t - 1;
@@ -452,6 +603,10 @@ insert_non_full(PyBTreeNode *node, PyObject *key, PyObject *value)
         if (node->n_keys > i) {
             memmove(&node->keys[i + 1], &node->keys[i], (node->n_keys - i) * sizeof(PyObject *));
             memmove(&node->values[i + 1], &node->values[i], (node->n_keys - i) * sizeof(PyObject *));
+            if (node->keys_i64_valid) {
+                memmove(&node->keys_i64[i + 1], &node->keys_i64[i], (node->n_keys - i) * sizeof(long long));
+                memmove(&node->keys_i64_valid[i + 1], &node->keys_i64_valid[i], (node->n_keys - i) * sizeof(unsigned char));
+            }
         }
 
         /* Insert new key-value */
@@ -459,6 +614,7 @@ insert_non_full(PyBTreeNode *node, PyObject *key, PyObject *value)
         Py_INCREF(value);
         node->keys[i] = key;
         node->values[i] = value;
+        cache_key(node, i, key);
         node->n_keys++;
         return 0;  /* Inserted new key */
     }
@@ -537,12 +693,23 @@ merge_children(PyBTreeNode *node, Py_ssize_t idx)
     /* Move key from parent to child */
     child->keys[t - 1] = node->keys[idx];
     child->values[t - 1] = node->values[idx];
+    if (child->keys_i64_valid) {
+        child->keys_i64[t - 1] = node->keys_i64[idx];
+        child->keys_i64_valid[t - 1] = node->keys_i64_valid[idx];
+    }
 
     /* Copy keys from sibling */
     memcpy(&child->keys[t], sibling->keys, sibling->n_keys * sizeof(PyObject *));
     memcpy(&child->values[t], sibling->values, sibling->n_keys * sizeof(PyObject *));
+    if (child->keys_i64_valid) {
+        memcpy(&child->keys_i64[t], sibling->keys_i64, sibling->n_keys * sizeof(long long));
+        memcpy(&child->keys_i64_valid[t], sibling->keys_i64_valid, sibling->n_keys * sizeof(unsigned char));
+    }
     memset(sibling->keys, 0, sibling->n_keys * sizeof(PyObject *));
     memset(sibling->values, 0, sibling->n_keys * sizeof(PyObject *));
+    if (sibling->keys_i64_valid) {
+        memset(sibling->keys_i64_valid, 0, sibling->n_keys * sizeof(unsigned char));
+    }
 
     /* Copy children if not leaf */
     if (!child->is_leaf) {
@@ -554,9 +721,16 @@ merge_children(PyBTreeNode *node, Py_ssize_t idx)
     if (node->n_keys - 1 > idx) {
         memmove(&node->keys[idx], &node->keys[idx + 1], (node->n_keys - 1 - idx) * sizeof(PyObject *));
         memmove(&node->values[idx], &node->values[idx + 1], (node->n_keys - 1 - idx) * sizeof(PyObject *));
+        if (node->keys_i64_valid) {
+            memmove(&node->keys_i64[idx], &node->keys_i64[idx + 1], (node->n_keys - 1 - idx) * sizeof(long long));
+            memmove(&node->keys_i64_valid[idx], &node->keys_i64_valid[idx + 1], (node->n_keys - 1 - idx) * sizeof(unsigned char));
+        }
     }
     node->keys[node->n_keys - 1] = NULL;
     node->values[node->n_keys - 1] = NULL;
+    if (node->keys_i64_valid) {
+        node->keys_i64_valid[node->n_keys - 1] = 0;
+    }
 
     /* Shift parent's children */
     if (node->n_keys > idx + 1) {
@@ -581,6 +755,10 @@ borrow_from_prev(PyBTreeNode *node, Py_ssize_t idx)
     /* Shift child's keys right */
     memmove(&child->keys[1], &child->keys[0], child->n_keys * sizeof(PyObject *));
     memmove(&child->values[1], &child->values[0], child->n_keys * sizeof(PyObject *));
+    if (child->keys_i64_valid) {
+        memmove(&child->keys_i64[1], &child->keys_i64[0], child->n_keys * sizeof(long long));
+        memmove(&child->keys_i64_valid[1], &child->keys_i64_valid[0], child->n_keys * sizeof(unsigned char));
+    }
 
     if (!child->is_leaf) {
         memmove(&child->children[1], &child->children[0], (child->n_keys + 1) * sizeof(PyBTreeNode *));
@@ -589,6 +767,10 @@ borrow_from_prev(PyBTreeNode *node, Py_ssize_t idx)
     /* Move key from parent to child */
     child->keys[0] = node->keys[idx - 1];
     child->values[0] = node->values[idx - 1];
+    if (child->keys_i64_valid) {
+        child->keys_i64[0] = node->keys_i64[idx - 1];
+        child->keys_i64_valid[0] = node->keys_i64_valid[idx - 1];
+    }
 
     if (!child->is_leaf) {
         child->children[0] = sibling->children[sibling->n_keys];
@@ -600,6 +782,11 @@ borrow_from_prev(PyBTreeNode *node, Py_ssize_t idx)
     node->values[idx - 1] = sibling->values[sibling->n_keys - 1];
     sibling->keys[sibling->n_keys - 1] = NULL;
     sibling->values[sibling->n_keys - 1] = NULL;
+    if (node->keys_i64_valid) {
+        node->keys_i64[idx - 1] = sibling->keys_i64[sibling->n_keys - 1];
+        node->keys_i64_valid[idx - 1] = sibling->keys_i64_valid[sibling->n_keys - 1];
+        sibling->keys_i64_valid[sibling->n_keys - 1] = 0;
+    }
 
     child->n_keys++;
     sibling->n_keys--;
@@ -615,6 +802,10 @@ borrow_from_next(PyBTreeNode *node, Py_ssize_t idx)
     /* Move key from parent to child */
     child->keys[child->n_keys] = node->keys[idx];
     child->values[child->n_keys] = node->values[idx];
+    if (child->keys_i64_valid) {
+        child->keys_i64[child->n_keys] = node->keys_i64[idx];
+        child->keys_i64_valid[child->n_keys] = node->keys_i64_valid[idx];
+    }
 
     if (!child->is_leaf) {
         child->children[child->n_keys + 1] = sibling->children[0];
@@ -623,14 +814,25 @@ borrow_from_next(PyBTreeNode *node, Py_ssize_t idx)
     /* Move key from sibling to parent */
     node->keys[idx] = sibling->keys[0];
     node->values[idx] = sibling->values[0];
+    if (node->keys_i64_valid) {
+        node->keys_i64[idx] = sibling->keys_i64[0];
+        node->keys_i64_valid[idx] = sibling->keys_i64_valid[0];
+    }
 
     /* Shift sibling's keys left */
     if (sibling->n_keys > 1) {
         memmove(&sibling->keys[0], &sibling->keys[1], (sibling->n_keys - 1) * sizeof(PyObject *));
         memmove(&sibling->values[0], &sibling->values[1], (sibling->n_keys - 1) * sizeof(PyObject *));
+        if (sibling->keys_i64_valid) {
+            memmove(&sibling->keys_i64[0], &sibling->keys_i64[1], (sibling->n_keys - 1) * sizeof(long long));
+            memmove(&sibling->keys_i64_valid[0], &sibling->keys_i64_valid[1], (sibling->n_keys - 1) * sizeof(unsigned char));
+        }
     }
     sibling->keys[sibling->n_keys - 1] = NULL;
     sibling->values[sibling->n_keys - 1] = NULL;
+    if (sibling->keys_i64_valid) {
+        sibling->keys_i64_valid[sibling->n_keys - 1] = 0;
+    }
 
     if (!sibling->is_leaf) {
         memmove(&sibling->children[0], &sibling->children[1], sibling->n_keys * sizeof(PyBTreeNode *));
@@ -677,9 +879,14 @@ delete_from_leaf(PyBTreeNode *node, Py_ssize_t idx)
     if (node->n_keys - 1 > idx) {
         memmove(&node->keys[idx], &node->keys[idx + 1], (node->n_keys - 1 - idx) * sizeof(PyObject *));
         memmove(&node->values[idx], &node->values[idx + 1], (node->n_keys - 1 - idx) * sizeof(PyObject *));
+        if (node->keys_i64_valid) {
+            memmove(&node->keys_i64[idx], &node->keys_i64[idx + 1], (node->n_keys - 1 - idx) * sizeof(long long));
+            memmove(&node->keys_i64_valid[idx], &node->keys_i64_valid[idx + 1], (node->n_keys - 1 - idx) * sizeof(unsigned char));
+        }
     }
     node->keys[node->n_keys - 1] = NULL;
     node->values[node->n_keys - 1] = NULL;
+    cache_key_clear(node, node->n_keys - 1);
     node->n_keys--;
 
     return 0;
@@ -702,6 +909,7 @@ delete_from_internal(PyBTreeNode *node, Py_ssize_t idx)
         Py_DECREF(node->values[idx]);
         node->keys[idx] = pred_key;
         node->values[idx] = pred_value;
+        cache_key(node, idx, pred_key);
         return delete_from_node(node->children[idx], pred_key);
     }
     else if (node->children[idx + 1]->n_keys >= t) {
@@ -714,6 +922,7 @@ delete_from_internal(PyBTreeNode *node, Py_ssize_t idx)
         Py_DECREF(node->values[idx]);
         node->keys[idx] = succ_key;
         node->values[idx] = succ_value;
+        cache_key(node, idx, succ_key);
         return delete_from_node(node->children[idx + 1], succ_key);
     }
     else {
@@ -781,7 +990,8 @@ PyBTree_New(int order)
 
     btree->order = order;
     btree->size = 0;
-    btree->root = (PyBTreeNode *)btreenode_new(order, 1);  /* Start with leaf root */
+    btree->cache_i64 = 1;
+    btree->root = (PyBTreeNode *)btreenode_new(order, 1, btree->cache_i64);  /* Start with leaf root */
     if (btree->root == NULL) {
         Py_DECREF(btree);
         return NULL;
@@ -815,7 +1025,7 @@ PyBTree_Insert(PyObject *self, PyObject *key, PyObject *value)
 
     /* If root is full, create a new root */
     if (btree->root->n_keys == 2 * order - 1) {
-        PyBTreeNode *new_root = (PyBTreeNode *)btreenode_new(order, 0);
+        PyBTreeNode *new_root = (PyBTreeNode *)btreenode_new(order, 0, btree->cache_i64);
         if (new_root == NULL) {
             return -1;
         }
@@ -1200,7 +1410,7 @@ btree_clear_internal(PyBTreeObject *btree)
     btree->size = 0;
 
     /* Create a new empty root */
-    btree->root = (PyBTreeNode *)btreenode_new(order, 1);
+    btree->root = (PyBTreeNode *)btreenode_new(order, 1, btree->cache_i64);
     if (btree->root == NULL) {
         return -1;
     }
@@ -1218,8 +1428,9 @@ static PyObject *
 btree_repr(PyObject *self)
 {
     PyBTreeObject *btree = (PyBTreeObject *)self;
-    return PyUnicode_FromFormat("BTreeDict(order=%d, size=%zd)",
-                                btree->order, btree->size);
+    return PyUnicode_FromFormat("BTreeDict(order=%d, size=%zd, cache_i64=%s)",
+                                btree->order, btree->size,
+                                btree->cache_i64 ? "True" : "False");
 }
 
 static Py_ssize_t
@@ -1272,6 +1483,9 @@ typedef struct {
     PyObject_HEAD
     PyBTreeObject *btree;           /* The B-tree being iterated */
     Py_ssize_t remaining;           /* Items remaining for length hint */
+    int leaf_only;                  /* Fast path when root is a leaf */
+    PyBTreeNode *leaf;              /* Leaf node for fast path */
+    Py_ssize_t leaf_index;          /* Next index in leaf */
     Py_ssize_t stack_top;           /* Top of stack (-1 = empty) */
     IterStackFrame stack[ITER_STACK_SIZE];  /* Stack for tree traversal */
 } PyBTreeIterObject;
@@ -1315,6 +1529,16 @@ static PyObject *
 btreeiter_next(PyObject *self)
 {
     PyBTreeIterObject *it = (PyBTreeIterObject *)self;
+
+    if (it->leaf_only) {
+        if (it->leaf_index < it->leaf->n_keys) {
+            PyObject *key = it->leaf->keys[it->leaf_index++];
+            it->remaining--;
+            Py_INCREF(key);
+            return key;
+        }
+        return NULL;
+    }
     
     while (it->stack_top >= 0) {
         IterStackFrame *frame = &it->stack[it->stack_top];
@@ -1400,11 +1624,20 @@ btree_iter(PyObject *self)
     Py_INCREF(btree);
     it->btree = btree;
     it->remaining = btree->size;
+    it->leaf_only = 0;
+    it->leaf = NULL;
+    it->leaf_index = 0;
     it->stack_top = -1;  /* Empty stack */
 
     /* Initialize by descending to leftmost leaf */
     if (btree->root != NULL && btree->root->n_keys > 0) {
-        iter_descend_left(it, btree->root);
+        if (btree->root->is_leaf) {
+            it->leaf_only = 1;
+            it->leaf = btree->root;
+        }
+        else {
+            iter_descend_left(it, btree->root);
+        }
     }
 
     PyObject_GC_Track((PyObject *)it);
@@ -1417,6 +1650,9 @@ typedef struct {
     PyObject_HEAD
     PyBTreeObject *btree;           /* The B-tree being iterated */
     Py_ssize_t remaining;           /* Items remaining for length hint */
+    int leaf_only;                  /* Fast path when root is a leaf */
+    PyBTreeNode *leaf;              /* Leaf node for fast path */
+    Py_ssize_t leaf_index;          /* Next index in leaf */
     Py_ssize_t stack_top;           /* Top of stack (-1 = empty) */
     IterStackFrame stack[ITER_STACK_SIZE];  /* Stack for tree traversal */
 } PyBTreeReverseIterObject;
@@ -1460,6 +1696,16 @@ static PyObject *
 btreereviter_next(PyObject *self)
 {
     PyBTreeReverseIterObject *it = (PyBTreeReverseIterObject *)self;
+
+    if (it->leaf_only) {
+        if (it->leaf_index >= 0) {
+            PyObject *key = it->leaf->keys[it->leaf_index--];
+            it->remaining--;
+            Py_INCREF(key);
+            return key;
+        }
+        return NULL;
+    }
     
     while (it->stack_top >= 0) {
         IterStackFrame *frame = &it->stack[it->stack_top];
@@ -1546,11 +1792,21 @@ btree_reversed(PyObject *self, PyObject *Py_UNUSED(ignored))
     Py_INCREF(btree);
     it->btree = btree;
     it->remaining = btree->size;
+    it->leaf_only = 0;
+    it->leaf = NULL;
+    it->leaf_index = -1;
     it->stack_top = -1;  /* Empty stack */
 
     /* Initialize by descending to rightmost leaf */
     if (btree->root != NULL && btree->root->n_keys > 0) {
-        iter_descend_right(it, btree->root);
+        if (btree->root->is_leaf) {
+            it->leaf_only = 1;
+            it->leaf = btree->root;
+            it->leaf_index = btree->root->n_keys - 1;
+        }
+        else {
+            iter_descend_right(it, btree->root);
+        }
     }
 
     PyObject_GC_Track((PyObject *)it);
@@ -1566,6 +1822,9 @@ typedef struct {
     PyObject *max_key;              /* Maximum key (exclusive), NULL for no max */
     int inclusive_min;              /* Include min_key */
     int inclusive_max;              /* Include max_key */
+    int leaf_only;                   /* Fast path when root is a leaf */
+    PyBTreeNode *leaf;               /* Leaf node for fast path */
+    Py_ssize_t leaf_index;           /* Next index in leaf */
     Py_ssize_t stack_top;           /* Top of stack (-1 = empty) */
     IterStackFrame stack[ITER_STACK_SIZE];  /* Stack for tree traversal */
     int started;                    /* Whether iteration has started */
@@ -1646,6 +1905,27 @@ static PyObject *
 btreerangeiter_next(PyObject *self)
 {
     PyBTreeRangeIterObject *it = (PyBTreeRangeIterObject *)self;
+
+    if (it->leaf_only) {
+        while (it->leaf_index < it->leaf->n_keys) {
+            PyObject *key = it->leaf->keys[it->leaf_index];
+
+            if (it->max_key != NULL) {
+                int cmp = compare_keys(key, it->max_key);
+                if (cmp == -2) return NULL;
+                if (it->inclusive_max) {
+                    if (cmp > 0) return NULL;
+                } else {
+                    if (cmp >= 0) return NULL;
+                }
+            }
+
+            it->leaf_index++;
+            Py_INCREF(key);
+            return key;
+        }
+        return NULL;
+    }
     
     /* Initialize on first call */
     if (!it->started) {
@@ -1795,8 +2075,30 @@ btree_irange(PyObject *self, PyObject *args, PyObject *kwds)
     Py_XINCREF(it->max_key);
     it->inclusive_min = inclusive_min;
     it->inclusive_max = inclusive_max;
+    it->leaf_only = 0;
+    it->leaf = NULL;
+    it->leaf_index = 0;
     it->stack_top = -1;
     it->started = 0;
+
+    if (btree->root != NULL && btree->root->n_keys > 0 && btree->root->is_leaf) {
+        int found;
+        Py_ssize_t idx = 0;
+        if (it->min_key != NULL) {
+            idx = node_search_key(btree->root, it->min_key, &found);
+            if (idx < 0) {
+                Py_DECREF(it);
+                return NULL;
+            }
+            if (found && !it->inclusive_min) {
+                idx++;
+            }
+        }
+        it->leaf_only = 1;
+        it->leaf = btree->root;
+        it->leaf_index = idx;
+        it->started = 1;
+    }
     
     PyObject_GC_Track((PyObject *)it);
     return (PyObject *)it;
@@ -2431,13 +2733,15 @@ static PyMappingMethods btree_as_mapping = {
 /* ==================== BTreeDict __init__ ==================== */
 
 PyDoc_STRVAR(btree_doc,
-"BTreeDict(order=8, /)\n"
+"BTreeDict(order=64, cache_i64=True, /)\n"
 "--\n\n"
 "Create a new B-tree with the specified order (minimum degree).\n\n"
 "The order determines the minimum and maximum number of keys in each node:\n"
 "- Each node (except root) has at least order-1 keys\n"
 "- Each node has at most 2*order-1 keys\n"
-"- Default order is 8 (up to 15 keys per node)\n\n"
+"- Default order is 64 (up to 127 keys per node)\n\n"
+"cache_i64 enables caching of int64 keys to reduce comparison overhead\n"
+"at the cost of higher memory usage.\n\n"
 "Example:\n"
 "    >>> bt = BTreeDict()\n"
 "    >>> bt[1] = 'one'\n"
@@ -2454,10 +2758,11 @@ btree_init(PyObject *self, PyObject *args, PyObject *kwds)
 {
     PyBTreeObject *btree = (PyBTreeObject *)self;
     int order = BTREE_DEFAULT_ORDER;
+    int cache_i64 = 1;
 
-    static char *kwlist[] = {"order", NULL};
+    static char *kwlist[] = {"order", "cache_i64", NULL};
 
-    if (!PyArg_ParseTupleAndKeywords(args, kwds, "|i", kwlist, &order)) {
+    if (!PyArg_ParseTupleAndKeywords(args, kwds, "|ip", kwlist, &order, &cache_i64)) {
         return -1;
     }
 
@@ -2470,11 +2775,12 @@ btree_init(PyObject *self, PyObject *args, PyObject *kwds)
 
     btree->order = order;
     btree->size = 0;
+    btree->cache_i64 = cache_i64 ? 1 : 0;
 
     /* Clear any existing root */
     Py_CLEAR(btree->root);
 
-    btree->root = (PyBTreeNode *)btreenode_new(order, 1);
+    btree->root = (PyBTreeNode *)btreenode_new(order, 1, btree->cache_i64);
     if (btree->root == NULL) {
         return -1;
     }
@@ -2483,7 +2789,7 @@ btree_init(PyObject *self, PyObject *args, PyObject *kwds)
 }
 
 static PyObject *
-btree_new(PyTypeObject *type, PyObject *args, PyObject *kwds)
+btree_new(PyTypeObject *type, PyObject *Py_UNUSED(args), PyObject *Py_UNUSED(kwds))
 {
     PyBTreeObject *self;
 
@@ -2495,6 +2801,7 @@ btree_new(PyTypeObject *type, PyObject *args, PyObject *kwds)
     self->root = NULL;
     self->size = 0;
     self->order = BTREE_DEFAULT_ORDER;
+    self->cache_i64 = 1;
 
     return (PyObject *)self;
 }

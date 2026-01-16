@@ -33,7 +33,7 @@ PyAPI_DATA(PyTypeObject) PyBTreeRangeIter_Type;
 /* Public API functions */
 
 /* Create a new empty B-tree with specified order (minimum degree).
- * Order must be >= 2. Default order is 3 if order <= 1.
+ * Order must be >= 2. Default order is 64 if order <= 1.
  * Returns NULL on failure.
  */
 PyAPI_FUNC(PyObject *) PyBTree_New(int order);

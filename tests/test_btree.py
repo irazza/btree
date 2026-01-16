@@ -284,6 +284,19 @@ def test_repr():
     assert "size=10" in r
 
 
+def test_cache_i64_disabled():
+    """Test that cache_i64 can be disabled."""
+    from btree import BTreeDict
+
+    bt = BTreeDict(order=8, cache_i64=False)
+    for i in range(1000):
+        bt[i] = i
+
+    assert len(bt) == 1000
+    assert bt[123] == 123
+    assert 999 in bt
+
+
 def run_all_tests():
     """Run all tests."""
     tests = [

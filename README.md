@@ -12,17 +12,10 @@ A high-performance B-Tree implementation written in C as a Python extension modu
 
 ## Installation
 
-### From PyPI
-
-```bash
-pip install btreedict
-```
-
 ### From source
 
 ```bash
-git clone https://github.com/irazza/btree.git
-cd btree
+cd /home/irazza/projects/btree
 pip install .
 ```
 
@@ -41,9 +34,9 @@ python setup.py build_ext --inplace
 ## Quick Start
 
 ```python
-from btreedict import BTreeDict
+from btree import BTreeDict
 
-# Create a B-tree (default order=8)
+# Create a B-tree (default order=64)
 bt = BTreeDict()
 
 # Insert key-value pairs
@@ -97,11 +90,11 @@ print(len(bt))      # 0
 
 ## API Reference
 
-### `BTreeDict(order=8)`
+### `BTreeDict(order=64)`
 
 Create a new B-tree with the specified order (minimum degree).
 
-- **order**: The minimum degree of the B-tree (default: 8)
+- **order**: The minimum degree of the B-tree (default: 64)
   - Each node has at most `2*order - 1` keys
   - Each node (except root) has at least `order - 1` keys
   - Must be >= 2
@@ -172,7 +165,7 @@ A B-tree of order `t` has the following properties:
 
 - **Small order (2-4)**: More balanced, more memory overhead per item
 - **Large order (16-64)**: Better cache locality, good for disk-based storage
-- **Default (8)**: Good general-purpose choice for in-memory workloads
+- **Default (64)**: Optimized for in-memory workloads with fewer node traversals
 
 ```python
 # For in-memory use with many items (default)
@@ -205,19 +198,46 @@ Use **dict** when you need:
 
 ## BTreeDict vs SortedDict
 
-Benchmark command: `python tests/test_btree_vs_sorteddict.py --benchmark` (Python 3.14.2, default order=8, January 14, 2026).
+Benchmark command: `python tests/test_btree_vs_sorteddict.py --benchmark`
+(Python 3.14.2, default order=64, cache_i64=True, AMD Ryzen AI 7 PRO 350 w/ Radeon 860M, Jan 16, 2026).
 
-**BTreeDict advantages**
-- Inserts and deletes stay faster under heavy churn (e.g., random insert of 100,000 keys: 71.6 ms vs 133.7 ms).
-- Bulk key/value/item materialization tends to be quicker thanks to contiguous node scans (10× keys/values/items over 100,000 keys: 1.55 s vs 1.72 s).
-- Mixed workloads with a blend of updates and deletes favor the C extension structure (mixed 100,000 ops: 69.6 ms vs 78.1 ms).
+### Speed (10,000 items)
 
-**SortedDict advantages**
-- Point lookups, membership checks, and iteration remain significantly faster thanks to its list-based indexing strategy (random lookup of 100,000 keys: 16.8 ms vs 80.7 ms).
-- Uses less memory for large datasets (100,000 keys: ~8.9 MB vs ~11.4 MB measured via tracemalloc).
-- Ships in pure Python, so it builds without a compiler and works on interpreters that cannot load CPython extensions.
+| Operation | BTreeDict | SortedDict |
+|-----------|-----------|------------|
+| Sequential insert | 0.66 ms | 2.92 ms |
+| Random insert | 0.99 ms | 4.73 ms |
+| Random lookup | 1.10 ms | 0.26 ms |
+| Contains check | 0.44 ms | 0.25 ms |
+| Iteration (10x) | 0.35 ms | 0.45 ms |
+| Random delete | 1.18 ms | 4.30 ms |
+| Mixed ops | 1.57 ms | 2.76 ms |
+| Update existing | 0.70 ms | 1.32 ms |
+| keys/values/items (100x) | 14.79 ms | 67.30 ms |
 
-In short, prefer `BTreeDict` when writes dominate or you need fast materialization of ordered views, and stick with `SortedDict` for read-heavy or memory-constrained workloads.
+### Speed (100,000 items)
+
+| Operation | BTreeDict | SortedDict |
+|-----------|-----------|------------|
+| Sequential insert | 6.32 ms | 30.79 ms |
+| Random insert | 16.64 ms | 62.05 ms |
+| Random lookup | 17.64 ms | 7.92 ms |
+| Contains check | 6.32 ms | 2.28 ms |
+| Iteration (10x) | 5.53 ms | 4.04 ms |
+| Random delete | 29.53 ms | 77.95 ms |
+| Mixed ops | 23.81 ms | 53.31 ms |
+| Update existing | 9.97 ms | 15.02 ms |
+| keys/values/items (100x) | 289.52 ms | 876.95 ms |
+
+### Memory (tracemalloc)
+
+| Items | BTreeDict | SortedDict |
+|-------|-----------|------------|
+| 10,000 | 815.51 KB | 682.38 KB |
+| 100,000 | 8.02 MB | 8.91 MB |
+| 500,000 | 40.12 MB | 39.59 MB |
+
+Summary: BTreeDict wins 13/18 benchmarks (average speedup 2.37x). SortedDict remains faster for read‑heavy workloads (lookup/contains/iteration), while BTreeDict is faster for inserts, deletes, updates, and bulk materialization.
 
 ## Project Structure
 
