@@ -40,16 +40,16 @@ setup(
     url='https://github.com/irazza/btree',
     license='MIT',
     ext_modules=[btree_module],
-    python_requires='>=3.11',
+    python_requires='>=3.12',
     classifiers=[
         'Development Status :: 4 - Beta',
         'Intended Audience :: Developers',
         'License :: OSI Approved :: MIT License',
         'Programming Language :: C',
         'Programming Language :: Python :: 3',
-        'Programming Language :: Python :: 3.11',
         'Programming Language :: Python :: 3.12',
         'Programming Language :: Python :: 3.13',
+        'Programming Language :: Python :: 3.14',
         'Topic :: Software Development :: Libraries :: Python Modules',
     ],
 )
