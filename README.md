@@ -34,10 +34,10 @@ python setup.py build_ext --inplace
 ## Quick Start
 
 ```python
-from btree import BTreeDict
+from btree import SortedDict
 
 # Create a B-tree (default order=64)
-bt = BTreeDict()
+bt = SortedDict()
 
 # Insert key-value pairs
 bt[5] = "five"
@@ -90,7 +90,7 @@ print(len(bt))      # 0
 
 ## API Reference
 
-### `BTreeDict(order=64)`
+### `SortedDict(order=64)`
 
 Create a new B-tree with the specified order (minimum degree).
 
@@ -125,14 +125,14 @@ Create a new B-tree with the specified order (minimum degree).
 | `bt.min()` | Return minimum key |
 | `bt.max()` | Return maximum key |
 | `bt.clear()` | Remove all items |
-| `bt == other` | Test equality with another BTreeDict |
+| `bt == other` | Test equality with another SortedDict |
 
 ### Range Queries with `irange()`
 
 The `irange()` method provides efficient iteration over a range of keys:
 
 ```python
-bt = BTreeDict()
+bt = SortedDict()
 for i in range(100):
     bt[i] = i * 10
 
@@ -169,10 +169,10 @@ A B-tree of order `t` has the following properties:
 
 ```python
 # For in-memory use with many items (default)
-bt = BTreeDict()
+bt = SortedDict()
 
 # For smaller datasets or tight memory constraints
-bt = BTreeDict(order=3)
+bt = SortedDict(order=3)
 ```
 
 ## Performance
@@ -196,14 +196,14 @@ Use **dict** when you need:
 - Fastest possible O(1) average lookup
 - No ordering requirements
 
-## BTreeDict vs SortedDict
+## SortedDict (B-Tree) vs sortedcontainers.SortedDict
 
 Benchmark command: `python benchmarks/compare_sorteddict.py --benchmark`
 (Python 3.14.2, default order=64, cache_i64=True, AMD Ryzen AI 7 PRO 350 w/ Radeon 860M, Jan 16, 2026).
 
 ### Speed (10,000 items)
 
-| Operation | BTreeDict | SortedDict |
+| Operation | SortedDict (btree) | SortedDict (sortedcontainers) |
 |-----------|-----------|------------|
 | Sequential insert | 0.66 ms | 2.92 ms |
 | Random insert | 0.99 ms | 4.73 ms |
@@ -217,7 +217,7 @@ Benchmark command: `python benchmarks/compare_sorteddict.py --benchmark`
 
 ### Speed (100,000 items)
 
-| Operation | BTreeDict | SortedDict |
+| Operation | SortedDict (btree) | SortedDict (sortedcontainers) |
 |-----------|-----------|------------|
 | Sequential insert | 6.32 ms | 30.79 ms |
 | Random insert | 16.64 ms | 62.05 ms |
@@ -231,13 +231,13 @@ Benchmark command: `python benchmarks/compare_sorteddict.py --benchmark`
 
 ### Memory (tracemalloc)
 
-| Items | BTreeDict | SortedDict |
+| Items | SortedDict (btree) | SortedDict (sortedcontainers) |
 |-------|-----------|------------|
 | 10,000 | 815.51 KB | 682.38 KB |
 | 100,000 | 8.02 MB | 8.91 MB |
 | 500,000 | 40.12 MB | 39.59 MB |
 
-Summary: BTreeDict wins 13/18 benchmarks (average speedup 2.37x). SortedDict remains faster for read‑heavy workloads (lookup/contains/iteration), while BTreeDict is faster for inserts, deletes, updates, and bulk materialization.
+Summary: SortedDict (btree) wins 13/18 benchmarks (average speedup 2.37x). SortedDict (sortedcontainers) remains faster for read‑heavy workloads (lookup/contains/iteration), while SortedDict (btree) is faster for inserts, deletes, updates, and bulk materialization.
 
 ## Project Structure
 

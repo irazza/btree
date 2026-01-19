@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-BTreeDict vs SortedDict comparison suite.
+SortedDict (B-tree) vs sortedcontainers.SortedDict comparison suite.
 
 Includes:
 - Correctness checks
@@ -31,19 +31,19 @@ from typing import List, Tuple
 # Add parent directory to path for in-place builds
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from btreedict import BTreeDict
+from btreedict import SortedDict
 
 try:
-    from sortedcontainers import SortedDict
+    import sortedcontainers
 except Exception as exc:  # pragma: no cover - optional dependency
-    SortedDict = None
+    sortedcontainers = None
     _sortedcontainers_import_error = exc
 else:
     _sortedcontainers_import_error = None
 
 
 def require_sortedcontainers() -> None:
-    if SortedDict is None:
+    if sortedcontainers is None:
         raise RuntimeError(
             "sortedcontainers is required for this comparison. "
             "Install it with: pip install sortedcontainers"
@@ -55,12 +55,12 @@ def require_sortedcontainers() -> None:
 # =============================================================================
 
 class CorrectnessTest(unittest.TestCase):
-    """Test that BTreeDict and SortedDict produce identical results."""
+    """Test that SortedDict (btree) and sortedcontainers.SortedDict match."""
 
     def test_insert_sequential(self):
         require_sortedcontainers()
-        bt = BTreeDict()
-        sd = SortedDict()
+        bt = SortedDict()
+        sd = sortedcontainers.SortedDict()
 
         for i in range(1000):
             bt[i] = i * 2
@@ -73,8 +73,8 @@ class CorrectnessTest(unittest.TestCase):
 
     def test_insert_reverse(self):
         require_sortedcontainers()
-        bt = BTreeDict()
-        sd = SortedDict()
+        bt = SortedDict()
+        sd = sortedcontainers.SortedDict()
 
         for i in range(999, -1, -1):
             bt[i] = f"value_{i}"
@@ -86,8 +86,8 @@ class CorrectnessTest(unittest.TestCase):
 
     def test_insert_random(self):
         require_sortedcontainers()
-        bt = BTreeDict()
-        sd = SortedDict()
+        bt = SortedDict()
+        sd = sortedcontainers.SortedDict()
 
         random.seed(42)
         keys = list(range(1000))
@@ -103,8 +103,8 @@ class CorrectnessTest(unittest.TestCase):
 
     def test_update_existing_keys(self):
         require_sortedcontainers()
-        bt = BTreeDict()
-        sd = SortedDict()
+        bt = SortedDict()
+        sd = sortedcontainers.SortedDict()
 
         for i in range(500):
             bt[i] = i
@@ -120,8 +120,8 @@ class CorrectnessTest(unittest.TestCase):
 
     def test_delete_operations(self):
         require_sortedcontainers()
-        bt = BTreeDict()
-        sd = SortedDict()
+        bt = SortedDict()
+        sd = sortedcontainers.SortedDict()
 
         for i in range(1000):
             bt[i] = i
@@ -137,8 +137,8 @@ class CorrectnessTest(unittest.TestCase):
 
     def test_mixed_operations(self):
         require_sortedcontainers()
-        bt = BTreeDict()
-        sd = SortedDict()
+        bt = SortedDict()
+        sd = sortedcontainers.SortedDict()
 
         random.seed(123)
 
@@ -161,8 +161,8 @@ class CorrectnessTest(unittest.TestCase):
 
     def test_get_method(self):
         require_sortedcontainers()
-        bt = BTreeDict()
-        sd = SortedDict()
+        bt = SortedDict()
+        sd = sortedcontainers.SortedDict()
 
         for i in range(0, 100, 2):
             bt[i] = i
@@ -174,8 +174,8 @@ class CorrectnessTest(unittest.TestCase):
 
     def test_contains(self):
         require_sortedcontainers()
-        bt = BTreeDict()
-        sd = SortedDict()
+        bt = SortedDict()
+        sd = sortedcontainers.SortedDict()
 
         for i in range(0, 100, 2):
             bt[i] = i
@@ -186,8 +186,8 @@ class CorrectnessTest(unittest.TestCase):
 
     def test_min_max(self):
         require_sortedcontainers()
-        bt = BTreeDict()
-        sd = SortedDict()
+        bt = SortedDict()
+        sd = sortedcontainers.SortedDict()
 
         random.seed(456)
         keys = random.sample(range(10000), 1000)
@@ -201,8 +201,8 @@ class CorrectnessTest(unittest.TestCase):
 
     def test_pop_method(self):
         require_sortedcontainers()
-        bt = BTreeDict()
-        sd = SortedDict()
+        bt = SortedDict()
+        sd = sortedcontainers.SortedDict()
 
         for i in range(100):
             bt[i] = i * 2
@@ -222,8 +222,8 @@ class CorrectnessTest(unittest.TestCase):
 
     def test_string_keys(self):
         require_sortedcontainers()
-        bt = BTreeDict()
-        sd = SortedDict()
+        bt = SortedDict()
+        sd = sortedcontainers.SortedDict()
 
         words = [
             "apple",
@@ -247,8 +247,8 @@ class CorrectnessTest(unittest.TestCase):
 
     def test_tuple_keys(self):
         require_sortedcontainers()
-        bt = BTreeDict()
-        sd = SortedDict()
+        bt = SortedDict()
+        sd = sortedcontainers.SortedDict()
 
         for i in range(10):
             for j in range(10):
@@ -282,24 +282,24 @@ class BenchmarkResult:
         self.speedup = sorteddict_time / btree_time if btree_time > 0 else 0
 
     def __str__(self):
-        time_winner = "BTreeDict" if self.btree_time < self.sorteddict_time else "SortedDict"
+        time_winner = "SortedDict (btree)" if self.btree_time < self.sorteddict_time else "SortedDict (sortedcontainers)"
         return (
             f"{self.name}:\n"
-            f"  BTreeDict:      {self.btree_time*1000:8.2f} ms\n"
-            f"  SortedDict: {self.sorteddict_time*1000:8.2f} ms\n"
+            f"  SortedDict (btree):         {self.btree_time*1000:8.2f} ms\n"
+            f"  SortedDict (sortedcontainers): {self.sorteddict_time*1000:8.2f} ms\n"
             f"  Speedup:    {self.speedup:.2f}x ({time_winner} faster)"
         )
 
 
 def benchmark_insert_sequential(n: int) -> BenchmarkResult:
     require_sortedcontainers()
-    bt = BTreeDict()
+    bt = SortedDict()
     start = time.perf_counter()
     for i in range(n):
         bt[i] = i
     btree_time = time.perf_counter() - start
 
-    sd = SortedDict()
+    sd = sortedcontainers.SortedDict()
     start = time.perf_counter()
     for i in range(n):
         sd[i] = i
@@ -314,13 +314,13 @@ def benchmark_insert_random(n: int) -> BenchmarkResult:
     keys = list(range(n))
     random.shuffle(keys)
 
-    bt = BTreeDict()
+    bt = SortedDict()
     start = time.perf_counter()
     for k in keys:
         bt[k] = k
     btree_time = time.perf_counter() - start
 
-    sd = SortedDict()
+    sd = sortedcontainers.SortedDict()
     start = time.perf_counter()
     for k in keys:
         sd[k] = k
@@ -331,8 +331,8 @@ def benchmark_insert_random(n: int) -> BenchmarkResult:
 
 def benchmark_lookup(n: int) -> BenchmarkResult:
     require_sortedcontainers()
-    bt = BTreeDict()
-    sd = SortedDict()
+    bt = SortedDict()
+    sd = sortedcontainers.SortedDict()
     for i in range(n):
         bt[i] = i
         sd[i] = i
@@ -355,8 +355,8 @@ def benchmark_lookup(n: int) -> BenchmarkResult:
 
 def benchmark_contains(n: int) -> BenchmarkResult:
     require_sortedcontainers()
-    bt = BTreeDict()
-    sd = SortedDict()
+    bt = SortedDict()
+    sd = sortedcontainers.SortedDict()
     for i in range(0, n, 2):
         bt[i] = i
         sd[i] = i
@@ -376,8 +376,8 @@ def benchmark_contains(n: int) -> BenchmarkResult:
 
 def benchmark_iteration(n: int) -> BenchmarkResult:
     require_sortedcontainers()
-    bt = BTreeDict()
-    sd = SortedDict()
+    bt = SortedDict()
+    sd = sortedcontainers.SortedDict()
     for i in range(n):
         bt[i] = i
         sd[i] = i
@@ -403,7 +403,7 @@ def benchmark_delete_random(n: int) -> BenchmarkResult:
     delete_order = list(range(n))
     random.shuffle(delete_order)
 
-    bt = BTreeDict()
+    bt = SortedDict()
     for i in range(n):
         bt[i] = i
 
@@ -412,7 +412,7 @@ def benchmark_delete_random(n: int) -> BenchmarkResult:
         del bt[k]
     btree_time = time.perf_counter() - start
 
-    sd = SortedDict()
+    sd = sortedcontainers.SortedDict()
     for i in range(n):
         sd[i] = i
 
@@ -434,7 +434,7 @@ def benchmark_mixed_operations(n: int) -> BenchmarkResult:
         value = random.randint(0, 10000)
         operations.append((op, key, value))
 
-    bt = BTreeDict()
+    bt = SortedDict()
     start = time.perf_counter()
     for op, key, value in operations:
         if op == "insert":
@@ -446,7 +446,7 @@ def benchmark_mixed_operations(n: int) -> BenchmarkResult:
                 del bt[key]
     btree_time = time.perf_counter() - start
 
-    sd = SortedDict()
+    sd = sortedcontainers.SortedDict()
     start = time.perf_counter()
     for op, key, value in operations:
         if op == "insert":
@@ -463,8 +463,8 @@ def benchmark_mixed_operations(n: int) -> BenchmarkResult:
 
 def benchmark_update(n: int) -> BenchmarkResult:
     require_sortedcontainers()
-    bt = BTreeDict()
-    sd = SortedDict()
+    bt = SortedDict()
+    sd = sortedcontainers.SortedDict()
     for i in range(n):
         bt[i] = i
         sd[i] = i
@@ -484,8 +484,8 @@ def benchmark_update(n: int) -> BenchmarkResult:
 
 def benchmark_keys_values_items(n: int) -> BenchmarkResult:
     require_sortedcontainers()
-    bt = BTreeDict()
-    sd = SortedDict()
+    bt = SortedDict()
+    sd = sortedcontainers.SortedDict()
     for i in range(n):
         bt[i] = i
         sd[i] = i
@@ -518,7 +518,7 @@ def benchmark_memory(n: int) -> Tuple[int, int]:
     gc.collect()
 
     tracemalloc.start()
-    bt = BTreeDict()
+    bt = SortedDict()
     for i in range(n):
         bt[i] = i
     btree_current, _ = tracemalloc.get_traced_memory()
@@ -528,7 +528,7 @@ def benchmark_memory(n: int) -> Tuple[int, int]:
     gc.collect()
 
     tracemalloc.start()
-    sd = SortedDict()
+    sd = sortedcontainers.SortedDict()
     for i in range(n):
         sd[i] = i
     sorteddict_current, _ = tracemalloc.get_traced_memory()
@@ -552,12 +552,12 @@ def format_bytes(b: int) -> str:
 def run_benchmarks() -> None:
     require_sortedcontainers()
     print("=" * 70)
-    print("BTreeDict vs SortedDict Comparison")
+    print("SortedDict (btree) vs sortedcontainers.SortedDict Comparison")
     print("=" * 70)
 
     print("\nWarming up...")
-    bt = BTreeDict()
-    sd = SortedDict()
+    bt = SortedDict()
+    sd = sortedcontainers.SortedDict()
     for i in range(1000):
         bt[i] = i
         sd[i] = i
@@ -601,11 +601,11 @@ def run_benchmarks() -> None:
     for size in [10_000, 100_000, 500_000]:
         btree_mem, sorteddict_mem = benchmark_memory(size)
         ratio = sorteddict_mem / btree_mem if btree_mem > 0 else 0
-        winner = "BTreeDict" if btree_mem < sorteddict_mem else "SortedDict"
+        winner = "SortedDict (btree)" if btree_mem < sorteddict_mem else "SortedDict (sortedcontainers)"
 
         print(f"\nMemory for {size:,} items:")
-        print(f"  BTreeDict:      {format_bytes(btree_mem)}")
-        print(f"  SortedDict: {format_bytes(sorteddict_mem)}")
+        print(f"  SortedDict (btree):         {format_bytes(btree_mem)}")
+        print(f"  SortedDict (sortedcontainers): {format_bytes(sorteddict_mem)}")
         print(f"  Ratio:      {ratio:.2f}x ({winner} more efficient)")
 
     print("\n" + "=" * 70)
@@ -617,12 +617,12 @@ def run_benchmarks() -> None:
     avg_speedup = sum(r.speedup for r in results) / len(results) if results else 0
 
     print(f"\nTotal benchmarks: {len(results)}")
-    print(f"BTreeDict wins:       {btree_wins}")
+    print(f"SortedDict (btree) wins:       {btree_wins}")
     print(f"SortedDict wins:  {sorteddict_wins}")
     print(f"Average speedup:  {avg_speedup:.2f}x")
 
     if avg_speedup > 1:
-        print("\nOverall: BTreeDict is faster on average")
+        print("\nOverall: SortedDict (btree) is faster on average")
     else:
         print("\nOverall: SortedDict is faster on average")
 
@@ -653,8 +653,8 @@ def run_hypothesis_tests() -> None:
         )
     )
     def random_ops_match_sorteddict(ops):
-        bt = BTreeDict()
-        sd = SortedDict()
+        bt = SortedDict()
+        sd = sortedcontainers.SortedDict()
 
         for op, key, value in ops:
             if op == "insert":
@@ -694,8 +694,8 @@ def run_hypothesis_tests() -> None:
         st.tuples(st.booleans(), st.booleans()),
     )
     def irange_matches_sorteddict(keys, min_v, max_v, inclusive):
-        bt = BTreeDict()
-        sd = SortedDict()
+        bt = SortedDict()
+        sd = sortedcontainers.SortedDict()
         for k in keys:
             bt[k] = k
             sd[k] = k
@@ -723,7 +723,7 @@ def run_pyperf(size: int, impl: str, remaining_argv: List[str]) -> None:
         ) from exc
 
     def build_sorted(n):
-        bt = BTreeDict()
+        bt = SortedDict()
         for i in range(n):
             bt[i] = i
         return bt
@@ -731,13 +731,13 @@ def run_pyperf(size: int, impl: str, remaining_argv: List[str]) -> None:
     def build_random(n, seed=42):
         keys = list(range(n))
         random.Random(seed).shuffle(keys)
-        bt = BTreeDict()
+        bt = SortedDict()
         for k in keys:
             bt[k] = k
         return bt
 
     def build_sorted_sd(n):
-        sd = SortedDict()
+        sd = sortedcontainers.SortedDict()
         for i in range(n):
             sd[i] = i
         return sd
@@ -745,7 +745,7 @@ def run_pyperf(size: int, impl: str, remaining_argv: List[str]) -> None:
     def build_random_sd(n, seed=42):
         keys = list(range(n))
         random.Random(seed).shuffle(keys)
-        sd = SortedDict()
+        sd = sortedcontainers.SortedDict()
         for k in keys:
             sd[k] = k
         return sd
@@ -753,12 +753,12 @@ def run_pyperf(size: int, impl: str, remaining_argv: List[str]) -> None:
     def bench_bulk_build_sorted(n, impl_name):
         if impl_name == "btree":
             def fn():
-                bt = BTreeDict()
+                bt = SortedDict()
                 for i in range(n):
                     bt[i] = i
             return fn
         def fn():
-            sd = SortedDict()
+            sd = sortedcontainers.SortedDict()
             for i in range(n):
                 sd[i] = i
         return fn
@@ -768,12 +768,12 @@ def run_pyperf(size: int, impl: str, remaining_argv: List[str]) -> None:
         random.Random(42).shuffle(keys)
         if impl_name == "btree":
             def fn():
-                bt = BTreeDict()
+                bt = SortedDict()
                 for k in keys:
                     bt[k] = k
             return fn
         def fn():
-            sd = SortedDict()
+            sd = sortedcontainers.SortedDict()
             for k in keys:
                 sd[k] = k
         return fn
@@ -795,14 +795,14 @@ def run_pyperf(size: int, impl: str, remaining_argv: List[str]) -> None:
 
     def bench_contains(n, impl_name):
         if impl_name == "btree":
-            bt = BTreeDict()
+            bt = SortedDict()
             for i in range(0, n, 2):
                 bt[i] = i
             def fn():
                 for k in range(n):
                     _ = k in bt
             return fn
-        sd = SortedDict()
+        sd = sortedcontainers.SortedDict()
         for i in range(0, n, 2):
             sd[i] = i
         def fn():
@@ -849,7 +849,7 @@ def run_pyperf(size: int, impl: str, remaining_argv: List[str]) -> None:
 
         if impl_name == "btree":
             def fn():
-                bt = BTreeDict()
+                bt = SortedDict()
                 for op, key, value in ops:
                     if op == "insert":
                         bt[key] = value
@@ -860,7 +860,7 @@ def run_pyperf(size: int, impl: str, remaining_argv: List[str]) -> None:
                             del bt[key]
             return fn
         def fn():
-            sd = SortedDict()
+            sd = sortedcontainers.SortedDict()
             for op, key, value in ops:
                 if op == "insert":
                     sd[key] = value
@@ -886,7 +886,7 @@ def run_pyperf(size: int, impl: str, remaining_argv: List[str]) -> None:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="BTreeDict vs SortedDict comparison")
+    parser = argparse.ArgumentParser(description="SortedDict (btree) vs sortedcontainers.SortedDict comparison")
     parser.add_argument("--test", action="store_true", help="Run correctness tests")
     parser.add_argument("--benchmark", action="store_true", help="Run benchmarks")
     parser.add_argument("--hypothesis", action="store_true", help="Run Hypothesis checks")

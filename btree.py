@@ -1,5 +1,5 @@
-"""Compatibility shim for importing BTreeDict from the C extension."""
+"""Compatibility shim for importing SortedDict from the C extension."""
 
-from btreedict import BTreeDict
+from btreedict import SortedDict
 
-__all__ = ["BTreeDict"]
+__all__ = ["SortedDict"]
