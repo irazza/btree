@@ -12,6 +12,12 @@ A high-performance B-Tree implementation written in C as a Python extension modu
 
 ## Installation
 
+### From PyPI
+
+```bash
+pip install btreedict
+```
+
 ### From source
 
 ```bash
